@@ -66,4 +66,16 @@ describe("parseLRC", () => {
     expect(lines[1].isBG).toBe(true);
     expect(lines[1].words.map((w) => w.word).join("")).toBe("和声部分");
   });
+
+  it("应解析带空格的 ESLRC 逐字歌词并标记 endsWithSpace", () => {
+    const text = `[00:01.00]<00:01.00>Hello <00:01.50>World<00:02.00>`;
+    const lines = parseLRC(text);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].words).toHaveLength(2);
+    expect(lines[0].words[0].word).toBe("Hello");
+    expect(lines[0].words[0].endsWithSpace).toBe(true);
+    expect(lines[0].words[1].word).toBe("World");
+    expect(lines[0].words[1].endsWithSpace).toBeUndefined();
+  });
 });

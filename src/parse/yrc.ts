@@ -9,8 +9,9 @@ const WORD_RE = /\((\d+),(\d+),\d+\)([^(]*)/g;
 
 /**
  * 解析网易云音乐 YRC 逐字歌词
- * @param text YRC 文本内容
- * @param detectBackground 是否自动识别背景人声，默认 true
+ * @param text - YRC 文本内容
+ * @param detectBackground - 是否自动识别背景人声，默认 true
+ * @returns 解析后的歌词行数组
  */
 export const parseYRC = (text: string, detectBackground = true): LyricLine[] => {
   const lines: LyricLine[] = [];
@@ -32,7 +33,25 @@ export const parseYRC = (text: string, detectBackground = true): LyricLine[] => 
     while ((match = WORD_RE.exec(rest)) !== null) {
       const start = parseInt(match[1], 10);
       const dur = parseInt(match[2], 10);
-      words.push({ word: match[3], startTime: start, endTime: start + dur });
+      const rawWord = match[3];
+      const startsWithSpace = /^\s/.test(rawWord);
+      const endsWithSpace = /\s$/.test(rawWord);
+      const cleanWord = rawWord.trim();
+      if (startsWithSpace && words.length > 0) {
+        words[words.length - 1].endsWithSpace = true;
+      }
+      if (cleanWord) {
+        words.push({
+          word: cleanWord,
+          startTime: start,
+          endTime: start + dur,
+          endsWithSpace: endsWithSpace || undefined,
+        });
+      }
+    }
+
+    if (words.length > 0) {
+      delete words[words.length - 1].endsWithSpace;
     }
 
     if (words.length === 0) continue;

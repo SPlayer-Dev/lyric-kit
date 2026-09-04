@@ -10,7 +10,7 @@ const HAS_ANGLE_TAGS = /<\d+:\d+/;
 
 /**
  * 提取行首连续的方括号时间戳
- * @param line 原始行文本
+ * @param line - 原始行文本
  * @returns 时间戳数组和文本起始位置
  */
 const extractHeaderTimes = (line: string): { times: number[]; textStart: number } => {
@@ -27,8 +27,9 @@ const extractHeaderTimes = (line: string): { times: number[]; textStart: number 
 };
 
 /**
- * 尝试解析 ESLRC 逐字
- * 格式：<00:00.000>一<00:00.186>句<00:00.373>话
+ * 尝试解析 ESLRC 逐字时间戳与歌词单词
+ * @param content - 包含尖括号时间戳的歌词内容
+ * @returns 单词数组，非 ESLRC 格式时返回 null
  */
 const parseEslrcWords = (content: string): LyricWord[] | null => {
   if (!HAS_ANGLE_TAGS.test(content)) return null;
@@ -43,11 +44,20 @@ const parseEslrcWords = (content: string): LyricWord[] | null => {
       if (lastWord && startTime >= lastWord.startTime) lastWord.endTime = startTime;
       continue;
     }
-    words.push({
-      startTime,
-      endTime: 0,
-      word: wordText,
-    });
+    const startsWithSpace = /^\s/.test(wordText);
+    const endsWithSpace = /\s$/.test(wordText);
+    const cleanWord = wordText.trim();
+    if (startsWithSpace && words.length > 0) {
+      words[words.length - 1].endsWithSpace = true;
+    }
+    if (cleanWord) {
+      words.push({
+        startTime,
+        endTime: 0,
+        word: cleanWord,
+        endsWithSpace: endsWithSpace || undefined,
+      });
+    }
   }
   if (words.length === 0) return null;
   for (let i = 0; i < words.length - 1; i++) {
@@ -59,8 +69,9 @@ const parseEslrcWords = (content: string): LyricWord[] | null => {
 };
 
 /**
- * 解析 LRC 逐字
- * 格式：[00:00.000]一[00:00.186]句[00:00.373]话
+ * 尝试解析行内方括号逐字时间戳与歌词单词
+ * @param line - 包含方括号逐字标签的行内容
+ * @returns 单词数组，非逐字行时返回 null
  */
 const parseLrcWords = (line: string): LyricWord[] | null => {
   BRACKET_TIME_RE.lastIndex = 0;
@@ -73,9 +84,20 @@ const parseLrcWords = (line: string): LyricWord[] | null => {
     const time = parseTime(match[1], match[2], match[3]);
     tagCount++;
     if (prevTime >= 0 && prevTextStart >= 0) {
-      const word = line.slice(prevTextStart, match.index);
-      if (word) {
-        words.push({ startTime: prevTime, endTime: time, word });
+      const rawWord = line.slice(prevTextStart, match.index);
+      const startsWithSpace = /^\s/.test(rawWord);
+      const endsWithSpace = /\s$/.test(rawWord);
+      const cleanWord = rawWord.trim();
+      if (startsWithSpace && words.length > 0) {
+        words[words.length - 1].endsWithSpace = true;
+      }
+      if (cleanWord) {
+        words.push({
+          startTime: prevTime,
+          endTime: time,
+          word: cleanWord,
+          endsWithSpace: endsWithSpace || undefined,
+        });
       }
     }
     prevTime = time;
@@ -83,14 +105,31 @@ const parseLrcWords = (line: string): LyricWord[] | null => {
   }
   if (tagCount < 2 || words.length === 0) return null;
   if (prevTextStart < line.length) {
-    const word = line.slice(prevTextStart);
-    if (word) {
-      words.push({ startTime: prevTime, endTime: 0, word });
+    const rawWord = line.slice(prevTextStart);
+    const startsWithSpace = /^\s/.test(rawWord);
+    const endsWithSpace = /\s$/.test(rawWord);
+    const cleanWord = rawWord.trim();
+    if (startsWithSpace && words.length > 0) {
+      words[words.length - 1].endsWithSpace = true;
+    }
+    if (cleanWord) {
+      words.push({
+        startTime: prevTime,
+        endTime: 0,
+        word: cleanWord,
+        endsWithSpace: endsWithSpace || undefined,
+      });
     }
   }
   return words;
 };
 
+/**
+ * 解析单行 LRC 内容负载，处理多时间戳并识别逐字或逐行歌词
+ * @param line - 待解析的 LRC 单行文本
+ * @param detectBackground - 是否自动识别背景人声，默认 true
+ * @returns 解析出的歌词行列表
+ */
 const parseLrcPayload = (line: string, detectBackground: boolean = true): LyricLine[] => {
   const { times, textStart } = extractHeaderTimes(line);
   if (times.length === 0) return [];
@@ -158,6 +197,12 @@ const parseLrcPayload = (line: string, detectBackground: boolean = true): LyricL
   return lines;
 };
 
+/**
+ * 解析单行 LRC 文本并处理元数据过滤与背景音分离
+ * @param line - 待解析的原始行文本
+ * @param detectBackground - 是否自动识别背景人声，默认 true
+ * @returns 提取出的歌词行列表
+ */
 const parseLrcLine = (line: string, detectBackground: boolean = true): LyricLine[] => {
   const trimmed = line.trim();
   if (!trimmed) return [];
@@ -194,9 +239,8 @@ const parseLrcLine = (line: string, detectBackground: boolean = true): LyricLine
 
 /**
  * 解析 LRC 歌词文本
- * 支持标准逐行 LRC、多时间戳行、ESLRC 逐字及行内背景音
- * @param text LRC 文本内容
- * @param detectBackground 是否自动识别背景人声，默认 true
+ * @param text - LRC 文本内容
+ * @param detectBackground - 是否自动识别背景人声，默认 true
  * @returns 解析后的歌词行数组，按时间升序排序
  */
 export const parseLRC = (text: string, detectBackground = true): LyricLine[] => {

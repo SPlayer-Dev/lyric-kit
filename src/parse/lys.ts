@@ -7,7 +7,9 @@ const PROP_RE = /^\[(\d)\]/;
 const WORD_RE = /([^(]+)\((\d+),(\d+)\)/g;
 
 /**
- * 解析属性码为 isBG 和 isDuet
+ * 解析属性码为背景音与对唱状态
+ * @param code - LyS 行头数字属性码（0~9）
+ * @returns 包含 isBG 与 isDuet 的状态对象
  */
 const parseProperty = (code: number): { isBG: boolean; isDuet: boolean } => {
   switch (code) {
@@ -26,7 +28,7 @@ const parseProperty = (code: number): { isBG: boolean; isDuet: boolean } => {
 
 /**
  * 解析 LyS（Lyricify Syllable）歌词文本
- * @param text LyS 文本内容
+ * @param text - LyS 文本内容
  * @returns 解析后的歌词行数组
  */
 export const parseLyS = (text: string): LyricLine[] => {

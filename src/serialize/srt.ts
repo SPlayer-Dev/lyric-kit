@@ -1,6 +1,11 @@
 import type { LyricLine } from "../types";
 import { formatSrtTime } from "../utils/timestamp";
 
+/**
+ * 获取歌词行纯文本
+ * @param line - 歌词行对象
+ * @returns 拼接后的纯文本内容
+ */
 const lineMainText = (line: LyricLine): string =>
   line.words
     .map((word) => word.word)
@@ -9,7 +14,7 @@ const lineMainText = (line: LyricLine): string =>
 
 /**
  * 将歌词行序列化为 SRT 字幕文本
- * @param lines 歌词行数组
+ * @param lines - 歌词行数组
  * @returns SRT 格式字符串
  */
 export const toSrt = (lines: LyricLine[]): string => {

@@ -18,11 +18,10 @@ export const ANGLE_TIME_RE = /<(\d+):(\d+)(?:[.:](\d{1,3}))?>([^<]*)/g;
 
 /**
  * 将分、秒、毫秒字符串解析为毫秒数
- * 自动归一化毫秒位数：1 位 ×100，2 位 ×10，3 位不变
- * @param min 分钟字符串
- * @param sec 秒字符串
- * @param ms 毫秒字符串（1~3 位）
- * @param padEndMs 是否自动归一化毫秒位数（默认 true）
+ * @param min - 分钟字符串
+ * @param sec - 秒字符串
+ * @param ms - 毫秒字符串（1~3 位）
+ * @param padEndMs - 是否自动归一化毫秒位数，默认 true
  * @returns 毫秒数，不超过 MAX_TIME
  */
 export const parseTime = (
@@ -44,8 +43,8 @@ export const parseTime = (
 };
 
 /**
- * 解析方括号时间戳字符串 "[mm:ss.xxx]" 为毫秒数
- * @param tag 完整的时间戳字符串，如 "[01:23.456]"
+ * 解析方括号时间戳字符串为毫秒数
+ * @param tag - 完整的时间戳字符串，如 "[01:23.456]"
  * @returns 毫秒数，解析失败返回 -1
  */
 export const parseBracketTag = (tag: string): number => {
@@ -56,41 +55,63 @@ export const parseBracketTag = (tag: string): number => {
 
 /**
  * 解析 TTML 时间戳为毫秒数
- * 支持格式：
- * - 纯秒数："1.234s"
- * - 分:秒："01:23.456"
- * - 时:分:秒："00:01:23.456"
- * @param value TTML 时间戳字符串
+ * @param value - TTML 时间戳字符串（支持纯秒数、分秒、时分秒）
  * @returns 毫秒数
  */
 export const parseTTMLTime = (value: string): number => {
   const text = value.trim();
   if (!text) return 0;
-  // 纯秒数格式：1.234s
-  if (text.endsWith("s") && !text.includes(":")) {
-    return Math.round(Number(text.slice(0, -1)) * 1000);
+
+  // 纯秒数带单位 s 格式
+  if (text.endsWith("s")) {
+    const num = Number(text.slice(0, -1));
+    return Number.isNaN(num) ? 0 : Math.round(num * 1000);
   }
-  // 冒号分隔格式：[hh:]mm:ss[.fff]
+
+  // 纯秒数不带冒号格式
+  if (!text.includes(":")) {
+    const num = Number(text);
+    return Number.isNaN(num) ? 0 : Math.round(num * 1000);
+  }
+
+  // 冒号分隔的时分秒格式
   const parts = text.split(":");
-  const last = parts[parts.length - 1] ?? "0";
-  const [secStr, fracStr] = last.split(".");
-  const sec = Number(secStr || "0");
-  const ms = fracStr ? Number(fracStr.padEnd(3, "0").slice(0, 3)) : 0;
-  let min = 0;
-  let hr = 0;
   if (parts.length === 2) {
-    min = Number(parts[0] || "0");
-  } else if (parts.length >= 3) {
-    hr = Number(parts[0] || "0");
-    min = Number(parts[1] || "0");
+    const min = Number(parts[0]);
+    const sec = Number(parts[1]);
+    if (Number.isNaN(min) || Number.isNaN(sec)) return 0;
+    return Math.round((min * 60 + sec) * 1000);
   }
-  return ((hr * 60 + min) * 60 + sec) * 1000 + ms;
+  if (parts.length >= 3) {
+    const hr = Number(parts[0]);
+    const min = Number(parts[1]);
+    const sec = Number(parts[2]);
+    if (Number.isNaN(hr) || Number.isNaN(min) || Number.isNaN(sec)) return 0;
+    return Math.round(((hr * 60 + min) * 60 + sec) * 1000);
+  }
+
+  return 0;
 };
 
+/**
+ * 将数字左侧补零至 2 位
+ * @param value - 原始数值
+ * @returns 补零后的 2 位字符串
+ */
 const pad2 = (value: number): string => String(value).padStart(2, "0");
+
+/**
+ * 将数字左侧补零至 3 位
+ * @param value - 原始数值
+ * @returns 补零后的 3 位字符串
+ */
 const pad3 = (value: number): string => String(value).padStart(3, "0");
 
-/** 毫秒 → mm:ss.xx（厘秒，标准 LRC 时间戳） */
+/**
+ * 将毫秒时间格式化为标准 LRC 时间戳字符串
+ * @param ms - 毫秒数值
+ * @returns 格式化后的 mm:ss.xx 字符串
+ */
 export const formatLrcTime = (ms: number): string => {
   const totalCs = Math.round(Math.max(0, ms) / 10);
   const cs = totalCs % 100;
@@ -100,7 +121,11 @@ export const formatLrcTime = (ms: number): string => {
   return `${pad2(min)}:${pad2(sec)}.${pad2(cs)}`;
 };
 
-/** 毫秒 → mm:ss.mmm（TTML 分秒毫秒时间戳） */
+/**
+ * 将毫秒时间格式化为 TTML 分秒毫秒时间戳字符串
+ * @param ms - 毫秒数值
+ * @returns 格式化后的 mm:ss.mmm 字符串
+ */
 export const formatTtmlTime = (ms: number): string => {
   const total = Math.max(0, Math.round(ms));
   const msPart = total % 1000;
@@ -110,7 +135,11 @@ export const formatTtmlTime = (ms: number): string => {
   return `${pad2(min)}:${pad2(sec)}.${pad3(msPart)}`;
 };
 
-/** 毫秒 → hh:mm:ss,mmm（SRT 字幕时间戳） */
+/**
+ * 将毫秒时间格式化为 SRT 字幕时间戳字符串
+ * @param ms - 毫秒数值
+ * @returns 格式化后的 hh:mm:ss,mmm 字符串
+ */
 export const formatSrtTime = (ms: number): string => {
   const total = Math.max(0, Math.round(ms));
   const msPart = total % 1000;

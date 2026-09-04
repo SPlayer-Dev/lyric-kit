@@ -12,15 +12,30 @@ const HAN_RE = /\p{Script=Han}/u;
 /** 日文假名 */
 const KANA_ONLY_RE = /^[\p{Script=Hiragana}\p{Script=Katakana}\u30fc\s]+$/u;
 
+/**
+ * 拼接单词数组为纯文本字符串
+ * @param words - 歌词单词数组
+ * @returns 拼接后的纯文本
+ */
 const joinedWords = (words: LyricWord[]): string => words.map((word) => word.word).join("");
 
+/**
+ * 剥除文本两端的括号与空白字符
+ * @param text - 待处理文本
+ * @returns 剥除括号后的文本
+ */
 const stripParens = (text: string): string =>
   text
     .replace(/^[\s（(]+/, "")
     .replace(/[）)\s]+$/, "")
     .trim();
 
-/** 是否为日文汉字后的假名注音 */
+/**
+ * 判断当前尾随括号内容是否为汉字后跟随的假名注音
+ * @param words - 歌词单词数组
+ * @param openIndex - 开启括号所在的单词索引
+ * @returns 是否为假名注音尾随
+ */
 const isJapaneseRubyTail = (words: LyricWord[], openIndex: number): boolean => {
   const before = joinedWords(words.slice(0, openIndex)).trim();
   const prevChar = Array.from(before).at(-1) ?? "";

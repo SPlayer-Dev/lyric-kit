@@ -8,7 +8,9 @@ const LINE_HEADER_RE = /^\[(\d+),(\d+)\]/;
 const TIMING_RE = /\((\d+),(\d+)\)/;
 
 /**
- * 逐字符解析单行 QRC 字级歌词
+ * 逐字符解析单行 QRC 字级歌词与时间戳
+ * @param rest - 行头时间戳之后的行文本内容
+ * @returns 解析出的歌词单词列表
  */
 const parseWords = (rest: string): LyricWord[] => {
   const words: LyricWord[] = [];
@@ -36,7 +38,20 @@ const parseWords = (rest: string): LyricWord[] => {
 
     const wordText = rest.slice(pos, timingIdx).replace(/\(/g, "");
     if (wordText) {
-      words.push({ word: wordText, startTime: start, endTime: start + dur });
+      const startsWithSpace = /^\s/.test(wordText);
+      const endsWithSpace = /\s$/.test(wordText);
+      const cleanWord = wordText.trim();
+      if (startsWithSpace && words.length > 0) {
+        words[words.length - 1].endsWithSpace = true;
+      }
+      if (cleanWord) {
+        words.push({
+          word: cleanWord,
+          startTime: start,
+          endTime: start + dur,
+          endsWithSpace: endsWithSpace || undefined,
+        });
+      }
     }
 
     pos = timingIdx + timingMatch[0].length;
@@ -47,10 +62,18 @@ const parseWords = (rest: string): LyricWord[] => {
     }
   }
 
+  if (words.length > 0) {
+    delete words[words.length - 1].endsWithSpace;
+  }
+
   return words;
 };
 
-/** 从 XML 包裹中提取纯文本歌词内容（非 XML 原样返回） */
+/**
+ * 从 XML 包裹结构中提取 QRC 纯文本歌词内容
+ * @param text - 原始 QRC 文本（可能包含 XML 标签）
+ * @returns 提取出的纯文本歌词
+ */
 const extractFromXml = (text: string): string => {
   if (!text.trimStart().startsWith("<")) return text;
   const greedyMatch = text.match(/LyricContent="([\s\S]*)"\s*\/?>/);
@@ -64,8 +87,9 @@ const extractFromXml = (text: string): string => {
 
 /**
  * 解析 QQ 音乐 QRC 歌词（支持纯文本与 XML 包裹格式）
- * @param text QRC 歌词内容
- * @param detectBackground 是否自动识别背景人声，默认 true
+ * @param text - QRC 歌词内容
+ * @param detectBackground - 是否自动识别背景人声，默认 true
+ * @returns 解析后的歌词行数组
  */
 export const parseQRC = (text: string, detectBackground = true): LyricLine[] => {
   const content = extractFromXml(text);

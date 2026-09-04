@@ -4,7 +4,9 @@ import type { LyricLine } from "../types";
 const TIME_RE = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
 
 /**
- * 解析 SRT 时间戳为毫秒
+ * 解析 SRT 时间戳为毫秒数
+ * @param value - SRT 格式时间字符串（如 "01:23:45,678"）
+ * @returns 对应毫秒数
  */
 const parseSrtTime = (value: string): number => {
   const m = TIME_RE.exec(value);
@@ -20,7 +22,7 @@ const parseSrtTime = (value: string): number => {
 
 /**
  * 解析 SRT 字幕文本
- * @param text SRT 文本内容
+ * @param text - SRT 文本内容
  * @returns 解析后的歌词行数组
  */
 export const parseSRT = (text: string): LyricLine[] => {

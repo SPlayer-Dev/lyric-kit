@@ -3,6 +3,7 @@
  * A lightweight, zero-dependency toolkit for parsing, serializing, and processing lyrics
  */
 
+// 清洗与归一化
 export { extractLyricAuthors } from "./clean/author";
 export {
   defaultKeywords,
@@ -13,9 +14,9 @@ export {
 export { normalizeKangxi } from "./clean/kangxi";
 export { applyLyricLanguages } from "./clean/language";
 export { normalizeLyricLines } from "./clean/normalize";
-// 4. 清洗与归一化
 export { stripLyricMetadata } from "./clean/stripper";
-// 2. 解析器
+
+// 解析器
 export {
   bestExternalIndex,
   detectFormat,
@@ -30,7 +31,8 @@ export {
   parseTTML,
   parseYRC,
 } from "./parse";
-// 3. 序列化器
+
+// 序列化器
 export {
   serializeLyric,
   toEnhancedLrc,
@@ -38,8 +40,11 @@ export {
   toSrt,
   toTtml,
 } from "./serialize";
-// 1. 类型定义
+
+// 类型定义
 export type {
+  DOMParserConstructor,
+  DOMParserLike,
   LyricFormat,
   LyricInput,
   LyricLanguage,
@@ -48,10 +53,18 @@ export type {
   LyricSpan,
   LyricWord,
   ParseLyricOptions,
+  ParseTTMLFunction,
+  ParseTTMLOptions,
   SerializeLyricFormat,
   StripOptions,
+  TTMLAgent,
+  TTMLMetadata,
+  TTMLPlatformId,
+  TTMLResult,
 } from "./types";
 export { DEFAULT_LYRIC_FORMAT_ORDER } from "./types";
+
+// 播放同步与行处理
 export { detectBackgroundLine, splitTrailingBackground } from "./utils/bg";
 export { getWordSweepProgress } from "./utils/sweep";
 export {
@@ -62,7 +75,8 @@ export {
   pickLatestStartedIndex,
   pickPrimaryIndex,
 } from "./utils/sync";
-// 5. 时间与播放算法
+
+// 时间与播放算法
 export {
   ANGLE_TIME_RE,
   BRACKET_TIME_RE,

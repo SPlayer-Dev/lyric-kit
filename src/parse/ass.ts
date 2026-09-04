@@ -10,8 +10,9 @@ const KARAOKE_RE = /\{\\[kK]f?(\d+)\}([^{]*)/g;
 const ASS_TAG_RE = /\{[^}]*\}/g;
 
 /**
- * 解析 ASS 时间戳为毫秒
- * 格式：H:MM:SS.cc（厘秒）
+ * 解析 ASS 时间戳为毫秒数
+ * @param value - ASS 格式时间字符串（如 "1:23:45.67"）
+ * @returns 对应毫秒数
  */
 const parseAssTime = (value: string): number => {
   const parts = value.split(":");
@@ -26,6 +27,9 @@ const parseAssTime = (value: string): number => {
 
 /**
  * 从文本中解析卡拉OK 逐字标签为单词数组
+ * @param text - 包含卡拉OK 标签的文本
+ * @param lineStart - 当前行的起始时间毫秒数
+ * @returns 逐字单词数组，无卡拉OK 标签返回 null
  */
 const parseKaraokeWords = (text: string, lineStart: number): LyricWord[] | null => {
   KARAOKE_RE.lastIndex = 0;
@@ -49,6 +53,11 @@ const parseKaraokeWords = (text: string, lineStart: number): LyricWord[] | null 
   return words.length > 0 ? words : null;
 };
 
+/**
+ * 剥除 ASS 格式样式特效标签
+ * @param text - 包含样式的原始文本
+ * @returns 剥除特效标签后的纯文本
+ */
 const stripAssTags = (text: string): string => text.replace(ASS_TAG_RE, "");
 
 interface DialogueLine {
@@ -60,8 +69,7 @@ interface DialogueLine {
 
 /**
  * 解析 ASS 字幕文本
- * 支持 {\kf} 卡拉OK 逐字标签与多 Style（orig, ts, roma）合并
- * @param text ASS 文本内容
+ * @param text - ASS 文本内容
  * @returns 解析后的歌词行数组
  */
 export const parseASS = (text: string): LyricLine[] => {

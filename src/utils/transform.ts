@@ -1,12 +1,9 @@
 import type { LyricLine } from "../types";
 
 /**
- * 通用歌词文本批量转换工具
- * 遍历并提取歌词行中的所有文本（包括主歌词字、注音、翻译），
- * 交给用户提供的转换器批量处理后安全回填，不污染原始对象。
- *
+ * 批量转换歌词文本（支持主字、注音、翻译并安全回填）
  * @param lines - 原始歌词行数组
- * @param transformer - 文本批量转换函数，接收提取的文本数组，返回等长的转换后数组
+ * @param transformer - 文本批量转换函数
  * @returns 转换后的全新歌词行数组
  */
 export const transformLyricText = async (

@@ -33,4 +33,16 @@ describe("parseQRC", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0].isBG).toBe(true);
   });
+
+  it("应正确解析西文词间空格标记 endsWithSpace", () => {
+    const text = `[1000,2000]Hello (1000,1000)World(2000,1000)`;
+    const lines = parseQRC(text);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].words).toHaveLength(2);
+    expect(lines[0].words[0].word).toBe("Hello");
+    expect(lines[0].words[0].endsWithSpace).toBe(true);
+    expect(lines[0].words[1].word).toBe("World");
+    expect(lines[0].words[1].endsWithSpace).toBeUndefined();
+  });
 });

@@ -12,20 +12,17 @@ const HAN_RE = /\p{Script=Han}/u;
 /** 拉丁字母；数字与标点不能作为英文判断依据 */
 const LATIN_RE = /\p{Script=Latin}/u;
 
-/** 判断是否有实质内容的翻译歌词 */
+/**
+ * 判断歌词行是否包含有效的翻译歌词
+ * @param line - 歌词行对象
+ * @returns 是否包含非空翻译
+ */
 const hasTranslation = (line: LyricLine): boolean => line.translatedLyric.trim().length > 0;
 
 /**
- * 为歌词行自动补充语言信息（ja / ko / zh-CN / und-Latn）
- *
- * Han 脚本无法独立区分中日韩：
- * - 同一首歌词出现假名时，通常将纯汉字行视为日语；
- * - 同一首歌词出现谚文时，通常将纯汉字行视为韩语；
- * - CJK 混合启发式规则：若所有包含假名/谚文的行均有翻译，
- *   则认定全为汉字且无翻译的行为中文，以此区分双语混合歌词。
- * - 拉丁文字使用 BCP 47 的 und-Latn，避免误标为英语。
- *
- * @param lines - 已解析的整首歌词（原地修改 line.language）
+ * 为歌词行自动推断并填充语言代码（ja / ko / zh-CN / und-Latn）
+ * @param lines - 歌词行数组（原地更新各行 language 属性）
+ * @returns 无返回值（原地修改）
  */
 export const applyLyricLanguages = (lines: LyricLine[]): void => {
   const lineContents = lines.map((line) => line.words.map((word) => word.word).join(""));

@@ -16,6 +16,12 @@ export { parseLRC } from "./lrc";
 export { parseLyS } from "./lys";
 export { parseQRC } from "./qrc";
 export { parseSRT } from "./srt";
+export type {
+  DOMParserConstructor,
+  DOMParserLike,
+  ParseTTMLFunction,
+  ParseTTMLOptions,
+} from "./ttml";
 export { parseTTML } from "./ttml";
 export { parseYRC } from "./yrc";
 
@@ -24,8 +30,8 @@ const ALIGN_TOLERANCE_MS = 300;
 
 /**
  * 从外部歌词列表中选出最优格式的索引
- * @param lyrics   外部歌词列表
- * @param priority 自定义格式优先级
+ * @param lyrics - 外部歌词列表
+ * @param priority - 自定义格式优先级列表
  * @returns 最优格式的索引，无可用歌词时返回 -1
  */
 export const bestExternalIndex = (
@@ -49,8 +55,7 @@ export const bestExternalIndex = (
 
 /**
  * 根据内容特征检测歌词格式
- * 用于内嵌歌词等无扩展名的场景
- * @param text 歌词文本内容
+ * @param text - 歌词文本内容
  * @returns 检测到的格式，默认 "lrc"
  */
 export const detectFormat = (text: string): LyricFormat => {
@@ -68,7 +73,11 @@ export const detectFormat = (text: string): LyricFormat => {
 };
 
 /**
- * 根据格式类型解析歌词文本
+ * 根据指定格式调用对应的解析器解析歌词内容
+ * @param text - 待解析的歌词文本
+ * @param format - 歌词格式
+ * @param options - 解析配置选项
+ * @returns 解析后的歌词行数组
  */
 const parseContent = (
   text: string,
@@ -99,20 +108,31 @@ const parseContent = (
   }
 };
 
+/**
+ * 获取单行歌词的所有词拼接纯文本
+ * @param line - 歌词行对象
+ * @returns 拼接后的纯文本字符串
+ */
 const lineText = (line: LyricLine): string =>
   line.words
     .map((w) => w.word)
     .join("")
     .trim();
 
+/**
+ * 校验翻译文本是否包含有效歌词内容
+ * @param text - 待检查的翻译文本
+ * @returns 是否为有意义的翻译文本
+ */
 const isMeaningfulTrans = (text: string): boolean =>
   !!text && text !== "//" && !text.includes("作品的著作权");
 
 /**
  * 将翻译/音译歌词按时间戳对齐到主歌词行
- * @param lines 主歌词行数组（会被原地修改）
- * @param transLines 已解析的翻译/音译歌词行
- * @param field 写入目标字段："translatedLyric" 或 "romanLyric"
+ * @param lines - 主歌词行数组（原地修改）
+ * @param transLines - 已解析的翻译/音译歌词行
+ * @param field - 写入目标字段名称
+ * @returns 无返回值（原地修改）
  */
 export const pairTranslation = (
   lines: LyricLine[],
@@ -139,11 +159,9 @@ export const pairTranslation = (
 
 /**
  * 解析歌词主入口函数
- * 支持传入字符串或完整 LyricInput（含翻译/音译），自动/手动指定格式与语言偏好
- *
- * @param input 歌词输入（纯字符串或 LyricInput 对象）
- * @param format 可选显式格式（不传则通过 detectFormat 自动嗅探）
- * @param options 解析配置项
+ * @param input - 歌词输入载荷（纯字符串或 LyricInput 对象）
+ * @param format - 可选显式格式（默认自动嗅探）
+ * @param options - 解析配置选项
  * @returns 标准化歌词行数组
  */
 export const parseLyric = (

@@ -47,4 +47,65 @@ describe("serialize", () => {
     expect(serializeLyric(mockLines, "ttml")).toBe(toTtml(mockLines));
     expect(serializeLyric(mockLines, "srt")).toBe(toSrt(mockLines));
   });
+
+  it("toEnhancedLrc 应正确导出 endsWithSpace 词间空格", () => {
+    const lines: LyricLine[] = [
+      {
+        startTime: 1000,
+        endTime: 3000,
+        words: [
+          { startTime: 1000, endTime: 2000, word: "Hello", endsWithSpace: true },
+          { startTime: 2000, endTime: 3000, word: "World" },
+        ],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: false,
+        isDuet: false,
+      },
+    ];
+    const elrc = toEnhancedLrc(lines);
+    expect(elrc).toBe("[00:01.00]<00:01.00>Hello <00:02.00>World");
+  });
+
+  it("toTtml 应支持导出 tts:ruby、songPart、endsWithSpace 与 AMLL 特性", () => {
+    const lines: LyricLine[] = [
+      {
+        startTime: 1000,
+        endTime: 3000,
+        songPart: "Chorus",
+        words: [
+          {
+            startTime: 1000,
+            endTime: 2000,
+            word: "漢字",
+            ruby: [
+              { word: "かん", startTime: 1000, endTime: 1500 },
+              { word: "じ", startTime: 1500, endTime: 2000 },
+            ],
+            endsWithSpace: true,
+          },
+          {
+            startTime: 2000,
+            endTime: 3000,
+            word: "Rock",
+            obscene: true,
+            emptyBeat: 2,
+          },
+        ],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: false,
+        isDuet: false,
+      },
+    ];
+    const ttml = toTtml(lines);
+    expect(ttml).toContain('itunes:song-part="Chorus"');
+    expect(ttml).toContain('tts:ruby="container"');
+    expect(ttml).toContain('tts:ruby="base"');
+    expect(ttml).toContain('tts:ruby="text"');
+    expect(ttml).toContain("かん");
+    expect(ttml).toContain("じ");
+    expect(ttml).toContain('amll:obscene="true"');
+    expect(ttml).toContain('amll:empty-beat="2"');
+  });
 });

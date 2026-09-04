@@ -17,13 +17,39 @@ const findNextMain = (lines: LyricLine[], from: number): number => {
  * 歌词行规范化处理
  * 包括空格规范化、行/词时间戳同步、连续背景行折叠、背景行时间窗口对齐与非刻意微小重叠修正
  * @param lines - 待规范化的歌词行数组（原地修改）
+ * @returns 无返回值（原地修改）
  */
 export const normalizeLyricLines = (lines: LyricLine[]): void => {
-  // 规范化空格
+  // 规范化空格与提炼 endsWithSpace
   for (const line of lines) {
-    for (const word of line.words) {
-      word.word = word.word.replace(/\s+/g, " ");
+    const cleanedWords: typeof line.words = [];
+    for (let wIdx = 0; wIdx < line.words.length; wIdx++) {
+      const word = line.words[wIdx];
+      const rawText = word.word;
+      if (!rawText.trim()) {
+        if (cleanedWords.length > 0) {
+          cleanedWords[cleanedWords.length - 1].endsWithSpace = true;
+        }
+        continue;
+      }
+
+      const startsWithSpace = /^\s/.test(rawText);
+      const endsWithSpace = /\s$/.test(rawText) || word.endsWithSpace;
+      const cleanWord = rawText.trim().replace(/\s+/g, " ");
+
+      if (startsWithSpace && cleanedWords.length > 0) {
+        cleanedWords[cleanedWords.length - 1].endsWithSpace = true;
+      }
+
+      word.word = cleanWord;
+      word.endsWithSpace = endsWithSpace || undefined;
+      cleanedWords.push(word);
     }
+
+    if (cleanedWords.length > 0) {
+      delete cleanedWords[cleanedWords.length - 1].endsWithSpace;
+    }
+    line.words = cleanedWords;
   }
 
   // 同步行/词时间戳

@@ -3,10 +3,10 @@ import type { LyricLine } from "../types";
 const LAST_LINE_FALLBACK_MS = 8000;
 
 /**
- * 根据播放时间查找当前歌词行索引（二分查找）
- * @param lines 已按 startTime 排序的歌词行数组
- * @param time 当前播放时间（毫秒）
- * @param prevIndex 上一次的索引，用于快速路径优化
+ * 根据播放时间查找当前歌词行索引
+ * @param lines - 已按 startTime 排序的歌词行数组
+ * @param time - 当前播放时间（毫秒）
+ * @param prevIndex - 上一次的索引，用于快速查找优化
  * @returns 匹配的行索引，无匹配返回 -1
  */
 export const findLyricIndex = (lines: LyricLine[], time: number, prevIndex = -1): number => {
@@ -49,10 +49,10 @@ export const findLyricIndex = (lines: LyricLine[], time: number, prevIndex = -1)
 };
 
 /**
- * 查找当前时间下所有激活的歌词行索引（支持对唱、背景行等时间重叠场景）
- * @param lines 已按 startTime 排序的歌词行数组
- * @param time 当前播放时间（毫秒）
- * @returns 所有 startTime <= time < endTime 的行索引
+ * 查找当前时间下所有激活的歌词行索引
+ * @param lines - 已按 startTime 排序的歌词行数组
+ * @param time - 当前播放时间（毫秒）
+ * @returns 所有当前处于激活时间范围内的行索引列表
  */
 export const findActiveLyricIndices = (lines: LyricLine[], time: number): number[] => {
   const result: number[] = [];
@@ -65,10 +65,10 @@ export const findActiveLyricIndices = (lines: LyricLine[], time: number): number
 };
 
 /**
- * 选出「最新已开始」的行索引（startTime <= time 的最大下标）
- * 下一句一开始就切到下一句，不管上一句是否结束
- * @param lines 歌词行数组
- * @param time 当前播放毫秒
+ * 选出最新已开始的行索引
+ * @param lines - 歌词行数组
+ * @param time - 当前播放毫秒数
+ * @returns 匹配的行索引，无匹配返回 -1
  */
 export const pickLatestStartedIndex = (lines: LyricLine[], time: number): number => {
   if (lines.length === 0) return -1;
@@ -88,9 +88,10 @@ export const pickLatestStartedIndex = (lines: LyricLine[], time: number): number
 };
 
 /**
- * 提前切到下一行（当前行结束后立即跳到下一行）
- * @param lines 歌词行数组
- * @param time 当前播放毫秒
+ * 提前切换至下一行歌词索引
+ * @param lines - 歌词行数组
+ * @param time - 当前播放毫秒数
+ * @returns 提前切换后的行索引
  */
 export const pickAdvanceOnEndIndex = (lines: LyricLine[], time: number): number => {
   const idx = pickLatestStartedIndex(lines, time);
@@ -101,9 +102,10 @@ export const pickAdvanceOnEndIndex = (lines: LyricLine[], time: number): number 
 };
 
 /**
- * 选出当前应作为 primary 的行索引（考虑重叠与平滑切换）
- * @param lines 歌词行数组
- * @param time 当前播放毫秒
+ * 选出当前作为主显示的行索引
+ * @param lines - 歌词行数组
+ * @param time - 当前播放毫秒数
+ * @returns 最优主行索引
  */
 export const pickPrimaryIndex = (lines: LyricLine[], time: number): number => {
   if (lines.length === 0) return -1;
@@ -130,9 +132,10 @@ export const pickPrimaryIndex = (lines: LyricLine[], time: number): number => {
 };
 
 /**
- * 将最后一行无效 endTime 截到曲目时长或 startTime+8s
- * @param lines 歌词行数组
- * @param trackDurationMs 曲目时长 ms
+ * 截断修正最后一行歌词的结束时间
+ * @param lines - 歌词行数组
+ * @param trackDurationMs - 可选的曲目总时长毫秒数
+ * @returns 截断处理后的歌词行数组
  */
 export const clampLastLineEnd = (lines: LyricLine[], trackDurationMs?: number): LyricLine[] => {
   if (lines.length === 0) return lines;

@@ -10,8 +10,9 @@ const WORD_RE = /<(\d+),(\d+)>([^<]*)/g;
 
 /**
  * 解析酷狗音乐 KRC 歌词（解密后的纯文本）
- * @param text 解密后的 KRC 文本
- * @param detectBackground 是否自动识别背景人声，默认 true
+ * @param text - 解密后的 KRC 文本内容
+ * @param detectBackground - 是否自动识别背景人声，默认 true
+ * @returns 解析后的歌词行数组
  */
 export const parseKRC = (text: string, detectBackground = true): LyricLine[] => {
   const lines: LyricLine[] = [];
@@ -32,14 +33,32 @@ export const parseKRC = (text: string, detectBackground = true): LyricLine[] => 
     let match: RegExpExecArray | null;
     let lastEnd = lineStart;
     while ((match = WORD_RE.exec(rest)) !== null) {
-      const word = match[3];
-      if (!word) continue;
+      const rawWord = match[3];
+      if (!rawWord) continue;
       const offset = parseInt(match[1], 10);
       const dur = parseInt(match[2], 10);
       const start = lineStart + offset;
       const end = start + dur;
-      words.push({ word, startTime: start, endTime: end });
+
+      const startsWithSpace = /^\s/.test(rawWord);
+      const endsWithSpace = /\s$/.test(rawWord);
+      const cleanWord = rawWord.trim();
+      if (startsWithSpace && words.length > 0) {
+        words[words.length - 1].endsWithSpace = true;
+      }
+      if (cleanWord) {
+        words.push({
+          word: cleanWord,
+          startTime: start,
+          endTime: end,
+          endsWithSpace: endsWithSpace || undefined,
+        });
+      }
       lastEnd = Math.max(lastEnd, end);
+    }
+
+    if (words.length > 0) {
+      delete words[words.length - 1].endsWithSpace;
     }
 
     if (words.length === 0) continue;
