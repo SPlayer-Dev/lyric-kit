@@ -1,4 +1,4 @@
-import type { LyricLine, LyricWord } from "../types";
+import type { LyricLine, LyricMetadata, LyricResult, LyricWord } from "../types";
 import { formatTtmlTime } from "../utils/timestamp";
 
 /**
@@ -55,7 +55,7 @@ const roleSpan = (role: string, text: string): string =>
  * @returns 嵌套的背景音 XML 字符串
  */
 const bgSpan = (bg: LyricLine): string =>
-  `<span ttm:role="x-bg">${wordSpans(bg)}${roleSpan("x-translation", bg.translatedLyric)}${roleSpan("x-roman", bg.romanLyric)}</span>`;
+  `<span ttm:role="x-bg" begin="${formatTtmlTime(bg.startTime)}" end="${formatTtmlTime(bg.endTime)}">${wordSpans(bg)}${roleSpan("x-translation", bg.translatedLyric)}${roleSpan("x-roman", bg.romanLyric)}</span>`;
 
 /**
  * 将主歌词行及其背景音序列化为 p 节点
@@ -79,11 +79,69 @@ const paragraph = (main: LyricLine, bgs: LyricLine[]): string => {
 };
 
 /**
+ * 根据歌词元数据生成 head/metadata 节点字符串
+ * @param metadata - 歌词元数据对象
+ * @returns head 节点 XML 字符串，若无有效元数据则返回空字符串
+ */
+const buildHeadXml = (metadata?: LyricMetadata): string => {
+  if (!metadata) return "";
+  const metaLines: string[] = [];
+
+  if (metadata.agents) {
+    for (const [id, agent] of Object.entries(metadata.agents)) {
+      const type = agent.type || (id === "v2" ? "group" : "person");
+      const nameXml = agent.name
+        ? `\n        <ttm:name type="full">${escapeXml(agent.name)}</ttm:name>\n      `
+        : "";
+      metaLines.push(
+        `      <ttm:agent type="${escapeXml(type)}" xml:id="${escapeXml(agent.id || id)}">${nameXml}</ttm:agent>`,
+      );
+    }
+  }
+
+  if (metadata.songwriters && metadata.songwriters.length > 0) {
+    const sw = metadata.songwriters
+      .map((s) => `        <itunes:songwriter>${escapeXml(s)}</itunes:songwriter>`)
+      .join("\n");
+    metaLines.push(`      <itunes:songwriters>\n${sw}\n      </itunes:songwriters>`);
+  }
+
+  const addAmllMeta = (key: string, value: string): void => {
+    metaLines.push(`      <amll:meta key="${escapeXml(key)}" value="${escapeXml(value)}" />`);
+  };
+
+  for (const v of metadata.title ?? []) addAmllMeta("musicName", v);
+  for (const v of metadata.artist ?? []) addAmllMeta("artists", v);
+  for (const v of metadata.album ?? []) addAmllMeta("album", v);
+  for (const v of metadata.isrc ?? []) addAmllMeta("isrc", v);
+  for (const v of metadata.authorIds ?? []) addAmllMeta("ttmlAuthorGithub", v);
+  for (const v of metadata.authorNames ?? []) addAmllMeta("ttmlAuthorGithubLogin", v);
+
+  if (metadata.platformIds) {
+    for (const [key, values] of Object.entries(metadata.platformIds)) {
+      for (const v of values ?? []) addAmllMeta(key, v);
+    }
+  }
+
+  if (metadata.rawProperties) {
+    for (const [key, values] of Object.entries(metadata.rawProperties)) {
+      for (const v of values ?? []) addAmllMeta(key, v);
+    }
+  }
+
+  if (metaLines.length === 0) return "";
+  return `  <head>\n    <metadata>\n${metaLines.join("\n")}\n    </metadata>\n  </head>`;
+};
+
+/**
  * 将歌词行序列化为标准 TTML XML
- * @param lines - 歌词行数组
+ * @param input - 歌词行数组或包含元数据的解析结果对象
  * @returns TTML XML 字符串
  */
-export const toTtml = (lines: LyricLine[]): string => {
+export const toTtml = (input: LyricLine[] | LyricResult): string => {
+  const lines = Array.isArray(input) ? input : input.lines;
+  const metadata = Array.isArray(input) ? undefined : input.metadata;
+
   const groups: { main: LyricLine; bg: LyricLine[] }[] = [];
   for (const line of lines) {
     if (line.isBG && groups.length) groups[groups.length - 1].bg.push(line);
@@ -115,12 +173,17 @@ export const toTtml = (lines: LyricLine[]): string => {
   }
   flushDiv();
 
-  return [
-    '<?xml version="1.0" encoding="utf-8"?>',
-    '<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:amll="http://www.example.com/ns/amll">',
-    "  <body>",
-    divBlocks.join("\n"),
-    "  </body>",
-    "</tt>",
-  ].join("\n");
+  const langAttr = metadata?.language ? ` xml:lang="${escapeXml(metadata.language)}"` : "";
+  const timingAttr = metadata?.timingMode
+    ? ` itunes:timing="${escapeXml(metadata.timingMode)}"`
+    : "";
+
+  const rootOpen = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xmlns:tts="http://www.w3.org/ns/ttml#styling" xmlns:amll="http://www.example.com/ns/amll"${langAttr}${timingAttr}>`;
+
+  const headXml = buildHeadXml(metadata);
+  const parts = ['<?xml version="1.0" encoding="utf-8"?>', rootOpen];
+  if (headXml) parts.push(headXml);
+  parts.push("  <body>", divBlocks.join("\n"), "  </body>", "</tt>");
+
+  return parts.join("\n");
 };

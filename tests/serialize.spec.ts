@@ -108,4 +108,50 @@ describe("serialize", () => {
     expect(ttml).toContain('amll:obscene="true"');
     expect(ttml).toContain('amll:empty-beat="2"');
   });
+
+  it("toTtml 应输出包含 begin/end 的背景人声标签与 metadata head", () => {
+    const lines: LyricLine[] = [
+      {
+        startTime: 1000,
+        endTime: 3000,
+        words: [{ startTime: 1000, endTime: 3000, word: "主旋律" }],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: false,
+        isDuet: false,
+      },
+      {
+        startTime: 1500,
+        endTime: 2500,
+        words: [{ startTime: 1500, endTime: 2500, word: "和声" }],
+        translatedLyric: "harmony",
+        romanLyric: "",
+        isBG: true,
+        isDuet: false,
+      },
+    ];
+
+    const ttml = toTtml({
+      lines,
+      metadata: {
+        title: ["测试曲目"],
+        artist: ["演唱者"],
+        album: ["测试专辑"],
+        songwriters: ["词曲作者"],
+        agents: {
+          v1: { id: "v1", name: "演唱者", type: "person" },
+        },
+      },
+    });
+
+    expect(ttml).toContain('<span ttm:role="x-bg" begin="00:01.500" end="00:02.500">');
+    expect(ttml).toContain("<head>");
+    expect(ttml).toContain("<metadata>");
+    expect(ttml).toContain('<amll:meta key="musicName" value="测试曲目" />');
+    expect(ttml).toContain('<amll:meta key="artists" value="演唱者" />');
+    expect(ttml).toContain('<amll:meta key="album" value="测试专辑" />');
+    expect(ttml).toContain("<itunes:songwriter>词曲作者</itunes:songwriter>");
+    expect(ttml).toContain('<ttm:agent type="person" xml:id="v1">');
+    expect(ttml).toContain('<ttm:name type="full">演唱者</ttm:name>');
+  });
 });

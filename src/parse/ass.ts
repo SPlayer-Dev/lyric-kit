@@ -1,7 +1,8 @@
-import type { LyricLine, LyricWord } from "../types";
+import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 
-/** 匹配 Dialogue 行各字段 */
-const DIALOGUE_RE = /^Dialogue:\s*\d+,(\d+:\d{2}:\d{2}\.\d{2}),(\d+:\d{2}:\d{2}\.\d{2}),([^,]*),/;
+/** 匹配 Dialogue 行时间戳、Style 与 Name（Speaker）字段 */
+const DIALOGUE_RE =
+  /^Dialogue:\s*\d+,(\d+:\d{2}:\d{2}(?:\.\d{1,3})?),(\d+:\d{2}:\d{2}(?:\.\d{1,3})?),([^,]*),([^,]*),/;
 
 /** 匹配卡拉OK 标签 {\kf<n>} / {\k<n>} / {\K<n>} */
 const KARAOKE_RE = /\{\\[kK]f?(\d+)\}([^{]*)/g;
@@ -11,7 +12,7 @@ const ASS_TAG_RE = /\{[^}]*\}/g;
 
 /**
  * 解析 ASS 时间戳为毫秒数
- * @param value - ASS 格式时间字符串（如 "1:23:45.67"）
+ * @param value - ASS 格式时间字符串（如 "1:23:45.67" 或 "0:01:23.456"）
  * @returns 对应毫秒数
  */
 const parseAssTime = (value: string): number => {
@@ -21,8 +22,16 @@ const parseAssTime = (value: string): number => {
   const min = parseInt(parts[1], 10);
   const secParts = parts[2].split(".");
   const sec = parseInt(secParts[0], 10);
-  const cs = parseInt(secParts[1] ?? "0", 10);
-  return ((hr * 60 + min) * 60 + sec) * 1000 + cs * 10;
+  const fractionStr = secParts[1] ?? "0";
+  let ms = 0;
+  if (fractionStr.length === 2) {
+    ms = parseInt(fractionStr, 10) * 10;
+  } else if (fractionStr.length === 1) {
+    ms = parseInt(fractionStr, 10) * 100;
+  } else {
+    ms = parseInt(fractionStr.slice(0, 3), 10);
+  }
+  return ((hr * 60 + min) * 60 + sec) * 1000 + ms;
 };
 
 /**
@@ -64,18 +73,33 @@ interface DialogueLine {
   startTime: number;
   endTime: number;
   style: string;
+  speaker: string;
   text: string;
 }
 
 /**
  * 解析 ASS 字幕文本
  * @param text - ASS 文本内容
- * @returns 解析后的歌词行数组
+ * @param options - 解析配置选项
+ * @returns 歌词解析结果
  */
-export const parseASS = (text: string): LyricLine[] => {
+export const parseASS = (text: string, options?: ParseOptions): LyricResult => {
+  const extractMetadata = options?.extractMetadata ?? false;
+  const metadata: LyricMetadata = {};
   const dialogues: DialogueLine[] = [];
+
   for (const raw of text.split("\n")) {
     const trimmed = raw.trim();
+    if (!trimmed) continue;
+
+    if (extractMetadata && trimmed.includes(":")) {
+      const colonIdx = trimmed.indexOf(":");
+      const propKey = trimmed.slice(0, colonIdx).trim().toLowerCase();
+      const propVal = trimmed.slice(colonIdx + 1).trim();
+      if (propKey === "title") metadata.title = [propVal];
+      else if (propKey === "original script" || propKey === "author") metadata.authors = [propVal];
+    }
+
     const match = DIALOGUE_RE.exec(trimmed);
     if (!match) continue;
 
@@ -85,21 +109,40 @@ export const parseASS = (text: string): LyricLine[] => {
       startTime: parseAssTime(match[1]),
       endTime: parseAssTime(match[2]),
       style: match[3].trim().toLowerCase(),
+      speaker: match[4].trim().toLowerCase(),
       text: dialogueText,
     });
   }
 
   const groups = new Map<string, { orig?: DialogueLine; ts?: DialogueLine; roma?: DialogueLine }>();
   for (const d of dialogues) {
-    const key = `${d.startTime}-${d.endTime}`;
+    const speaker = d.speaker;
+    const style = d.style;
+    const isTrans =
+      style === "ts" ||
+      style === "translate" ||
+      style === "translation" ||
+      speaker.includes("trans") ||
+      style.includes("trans");
+    const isRoma =
+      style === "roma" ||
+      style === "roman" ||
+      style === "romaji" ||
+      speaker.includes("roman") ||
+      speaker.includes("roma") ||
+      style.includes("roman") ||
+      style.includes("roma");
+
+    const track = speaker || (style.startsWith("v") ? style : "");
+    const trackBase = track.replace(/-(trans|roman|roma)$/, "");
+    const key = `${d.startTime}-${d.endTime}-${trackBase}`;
     const group = groups.get(key) ?? {};
-    if (d.style === "orig" || d.style === "default") {
-      group.orig = d;
-    } else if (d.style === "ts" || d.style === "translate" || d.style === "translation") {
+
+    if (isTrans) {
       group.ts = d;
-    } else if (d.style === "roma" || d.style === "roman" || d.style === "romaji") {
+    } else if (isRoma) {
       group.roma = d;
-    } else if (!group.orig) {
+    } else {
       group.orig = d;
     }
     groups.set(key, group);
@@ -118,17 +161,30 @@ export const parseASS = (text: string): LyricLine[] => {
     const translatedLyric = group.ts ? stripAssTags(group.ts.text).trim() : "";
     const romanLyric = group.roma ? stripAssTags(group.roma.text).trim() : "";
 
+    const track = source.speaker || source.style;
+    const isDuet = track.includes("v2");
+    const isBG = track.includes("bg");
+
     lines.push({
       words,
       translatedLyric,
       romanLyric,
       startTime: source.startTime,
       endTime: source.endTime,
-      isBG: false,
-      isDuet: false,
+      isBG,
+      isDuet,
     });
   }
 
   lines.sort((a, b) => a.startTime - b.startTime);
-  return lines;
+
+  if (extractMetadata) {
+    const hasWordTiming = lines.some((l) => (l.words?.length ?? 0) > 1);
+    metadata.timingMode = hasWordTiming ? "Word" : "Line";
+  }
+
+  return {
+    lines,
+    metadata,
+  };
 };

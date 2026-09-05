@@ -15,6 +15,8 @@ describe("detectFormat & bestExternalIndex", () => {
     ).toBe("qrc");
     expect(detectFormat("[1]LyS格式(1000,500)")).toBe("lys");
     expect(detectFormat("[Script Info]\nTitle: Test ASS")).toBe("ass");
+    expect(detectFormat("[00:01.000]<0,500>酷<500,500>狗")).toBe("krc");
+    expect(detectFormat("[id:$00000000]\n[1000,1000]<0,500,0>测")).toBe("krc");
   });
 
   it("应按照指定优先级挑选最优歌词", () => {

@@ -1,4 +1,4 @@
-import type { LyricLine } from "../types";
+import type { LyricLine, LyricResult, ParseOptions } from "../types";
 
 /** 匹配 SRT 时间戳 HH:MM:SS,mmm */
 const TIME_RE = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
@@ -23,9 +23,10 @@ const parseSrtTime = (value: string): number => {
 /**
  * 解析 SRT 字幕文本
  * @param text - SRT 文本内容
- * @returns 解析后的歌词行数组
+ * @param _options - 解析配置选项
+ * @returns 歌词解析结果
  */
-export const parseSRT = (text: string): LyricLine[] => {
+export const parseSRT = (text: string, options?: ParseOptions): LyricResult => {
   const lines: LyricLine[] = [];
   const blocks = text.replace(/\r\n/g, "\n").split(/\n\n+/);
 
@@ -64,5 +65,8 @@ export const parseSRT = (text: string): LyricLine[] => {
     });
   }
 
-  return lines;
+  return {
+    lines,
+    metadata: options?.extractMetadata ? { timingMode: "Line" } : {},
+  };
 };

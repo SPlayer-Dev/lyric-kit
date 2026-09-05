@@ -23,7 +23,7 @@ describe("parseTTML", () => {
     </div>
   </body>
 </tt>`;
-    const lines = parseTTML(xml);
+    const { lines, metadata } = parseTTML(xml);
 
     expect(lines).toHaveLength(2);
     expect(lines[0].startTime).toBe(1000);
@@ -34,6 +34,7 @@ describe("parseTTML", () => {
 
     expect(lines[1].startTime).toBe(4000);
     expect(lines[1].isDuet).toBe(true);
+    expect(metadata).toEqual({});
   });
 
   it("应解析 iTunes 翻译元数据", () => {
@@ -56,7 +57,7 @@ describe("parseTTML", () => {
     </div>
   </body>
 </tt>`;
-    const lines = parseTTML(xml, "zh-CN");
+    const { lines } = parseTTML(xml, { preferredLang: "zh-CN" });
 
     expect(lines).toHaveLength(1);
     expect(lines[0].translatedLyric).toBe("你好世界");
@@ -74,7 +75,7 @@ describe("parseTTML", () => {
     </div>
   </body>
 </tt>`;
-    const lines = parseTTML(xml);
+    const { lines } = parseTTML(xml);
     expect(lines).toHaveLength(1);
     expect(lines[0].words).toHaveLength(2);
     expect(lines[0].words[0].word).toBe("Hello");
@@ -101,7 +102,7 @@ describe("parseTTML", () => {
     </div>
   </body>
 </tt>`;
-    const lines = parseTTML(xml);
+    const { lines } = parseTTML(xml);
     expect(lines).toHaveLength(1);
     expect(lines[0].words).toHaveLength(2);
 
@@ -141,7 +142,7 @@ describe("parseTTML", () => {
     </div>
   </body>
 </tt>`;
-    const lines = parseTTML(xml);
+    const { lines } = parseTTML(xml);
     expect(lines).toHaveLength(2);
     expect(lines[0].songPart).toBe("Verse 1");
     expect(lines[0].blockIndex).toBe(1);
@@ -162,7 +163,7 @@ describe("parseTTML", () => {
     </div>
   </body>
 </tt>`;
-    const lines = parseTTML(xml);
+    const { lines } = parseTTML(xml);
     expect(lines).toHaveLength(1);
     expect(lines[0].words[0].word).toBe("Explicit");
     expect(lines[0].words[0].obscene).toBe(true);
@@ -171,7 +172,7 @@ describe("parseTTML", () => {
     expect(lines[0].words[1].emptyBeat).toBe(3);
   });
 
-  it("函数重载 { full: true } 应返回元数据与歌词行", () => {
+  it("配置 { extractMetadata: true } 应返回元数据与歌词行", () => {
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <tt xmlns="http://www.w3.org/ns/ttml"
     xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
@@ -204,7 +205,7 @@ describe("parseTTML", () => {
     </div>
   </body>
 </tt>`;
-    const result = parseTTML(xml, { full: true });
+    const result = parseTTML(xml, { extractMetadata: true });
 
     expect(result.lines).toHaveLength(1);
     expect(result.lines[0].words[0].word).toBe("Hello");
@@ -227,7 +228,7 @@ describe("parseTTML", () => {
   it("应支持显式传入 domParser 构造函数或实例", () => {
     const xml = `<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="00:01.000" end="00:02.000"><span>Test</span></p></div></body></tt>`;
     const customParser = new DOMParser();
-    const lines = parseTTML(xml, { domParser: customParser });
+    const { lines } = parseTTML(xml, { domParser: customParser });
     expect(lines).toHaveLength(1);
     expect(lines[0].words[0].word).toBe("Test");
   });

@@ -1,64 +1,47 @@
-import type { LyricLine, LyricWord } from "../types";
+import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
 
 /** 行头：[起始毫秒, 时长毫秒] */
 const LINE_HEADER_RE = /^\[(\d+),(\d+)\]/;
 
-/** 时间标记开头：`(` 紧跟数字 */
-const TIMING_RE = /\((\d+),(\d+)\)/;
+/** 匹配元数据标签（如 [ti:xxx]、[ar:xxx]） */
+const META_TAG_RE = /^\[([a-zA-Z]+):(.*?)]$/;
+
+/** 逐词匹配正则：词内容(起始毫秒,时长毫秒) */
+const WORD_RE = /(.*?)\((\d+),(\d+)\)/g;
 
 /**
- * 逐字符解析单行 QRC 字级歌词与时间戳
+ * 逐词解析单行 QRC 字级歌词与时间戳
  * @param rest - 行头时间戳之后的行文本内容
  * @returns 解析出的歌词单词列表
  */
 const parseWords = (rest: string): LyricWord[] => {
   const words: LyricWord[] = [];
-  let pos = 0;
+  WORD_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
 
-  while (pos < rest.length) {
-    let timingIdx = rest.indexOf("(", pos);
-    while (timingIdx !== -1 && timingIdx + 1 < rest.length && !/\d/.test(rest[timingIdx + 1])) {
-      timingIdx = rest.indexOf("(", timingIdx + 1);
-    }
-    if (timingIdx === -1 || timingIdx + 1 >= rest.length) break;
+  while ((match = WORD_RE.exec(rest)) !== null) {
+    const rawWord = match[1];
+    const start = parseInt(match[2], 10);
+    const dur = parseInt(match[3], 10);
 
-    const timingSub = rest.slice(timingIdx);
-    const timingMatch = TIMING_RE.exec(timingSub);
-    if (!timingMatch) break;
+    if (!rawWord && dur === 0) continue;
 
-    const start = parseInt(timingMatch[1], 10);
-    const dur = parseInt(timingMatch[2], 10);
+    const startsWithSpace = /^\s/.test(rawWord);
+    const endsWithSpace = /\s$/.test(rawWord);
+    const cleanWord = rawWord.trim();
 
-    for (let i = pos; i < timingIdx; i++) {
-      if (rest[i] === "(") {
-        words.push({ word: "(", startTime: start, endTime: start + dur });
-      }
+    if (startsWithSpace && words.length > 0) {
+      words[words.length - 1].endsWithSpace = true;
     }
 
-    const wordText = rest.slice(pos, timingIdx).replace(/\(/g, "");
-    if (wordText) {
-      const startsWithSpace = /^\s/.test(wordText);
-      const endsWithSpace = /\s$/.test(wordText);
-      const cleanWord = wordText.trim();
-      if (startsWithSpace && words.length > 0) {
-        words[words.length - 1].endsWithSpace = true;
-      }
-      if (cleanWord) {
-        words.push({
-          word: cleanWord,
-          startTime: start,
-          endTime: start + dur,
-          endsWithSpace: endsWithSpace || undefined,
-        });
-      }
-    }
-
-    pos = timingIdx + timingMatch[0].length;
-
-    if (pos < rest.length && rest[pos] === ")") {
-      words.push({ word: ")", startTime: start, endTime: start + dur });
-      pos++;
+    if (cleanWord) {
+      words.push({
+        word: cleanWord,
+        startTime: start,
+        endTime: start + dur,
+        endsWithSpace: endsWithSpace || undefined,
+      });
     }
   }
 
@@ -69,35 +52,88 @@ const parseWords = (rest: string): LyricWord[] => {
   return words;
 };
 
+/** XML 字符实体反转义 */
+const decodeXmlEntities = (str: string): string =>
+  str
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+
 /**
- * 从 XML 包裹结构中提取 QRC 纯文本歌词内容
+ * 从 XML 包裹结构中提取 QRC 纯文本歌词内容与元数据
  * @param text - 原始 QRC 文本（可能包含 XML 标签）
- * @returns 提取出的纯文本歌词
+ * @returns 提取出的纯文本歌词与元数据对象
  */
-const extractFromXml = (text: string): string => {
-  if (!text.trimStart().startsWith("<")) return text;
+const extractFromXml = (text: string): { content: string; xmlMeta?: LyricMetadata } => {
+  if (!text.trimStart().startsWith("<")) return { content: text };
+
+  let xmlMeta: LyricMetadata | undefined;
+  const titleMatch = text.match(/(?:Title|musicName)="([^"]+)"/i);
+  const singerMatch = text.match(/(?:Singer|Artist|artists)="([^"]+)"/i);
+  const albumMatch = text.match(/(?:Album)="([^"]+)"/i);
+
+  if (titleMatch || singerMatch || albumMatch) {
+    xmlMeta = {};
+    if (titleMatch) xmlMeta.title = [decodeXmlEntities(titleMatch[1])];
+    if (singerMatch) xmlMeta.artist = [decodeXmlEntities(singerMatch[1])];
+    if (albumMatch) xmlMeta.album = [decodeXmlEntities(albumMatch[1])];
+  }
+
   const greedyMatch = text.match(/LyricContent="([\s\S]*)"\s*\/?>/);
-  if (greedyMatch) return greedyMatch[1];
+  if (greedyMatch) return { content: decodeXmlEntities(greedyMatch[1]), xmlMeta };
   const cdataMatch = text.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-  if (cdataMatch) return cdataMatch[1];
+  if (cdataMatch) return { content: cdataMatch[1], xmlMeta };
   const attrMatch = text.match(/LyricContent="([^"]*)"/);
-  if (attrMatch) return attrMatch[1];
-  return text;
+  if (attrMatch) return { content: decodeXmlEntities(attrMatch[1]), xmlMeta };
+  return { content: text, xmlMeta };
 };
 
 /**
  * 解析 QQ 音乐 QRC 歌词（支持纯文本与 XML 包裹格式）
  * @param text - QRC 歌词内容
- * @param detectBackground - 是否自动识别背景人声，默认 true
- * @returns 解析后的歌词行数组
+ * @param options - 解析配置选项
+ * @returns 歌词解析结果
  */
-export const parseQRC = (text: string, detectBackground = true): LyricLine[] => {
-  const content = extractFromXml(text);
+export const parseQRC = (text: string, options?: ParseOptions): LyricResult => {
+  const detectBackground = options?.detectBackground ?? false;
+  const extractMetadata = options?.extractMetadata ?? false;
+  const { content, xmlMeta } = extractFromXml(text);
+  const metadata: LyricMetadata =
+    extractMetadata && xmlMeta
+      ? { ...xmlMeta, timingMode: "Word" }
+      : extractMetadata
+        ? { timingMode: "Word" }
+        : {};
   const lines: LyricLine[] = [];
 
   for (const raw of content.split("\n")) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
+
+    const metaMatch = META_TAG_RE.exec(trimmed);
+    if (metaMatch) {
+      if (extractMetadata) {
+        const key = metaMatch[1].toLowerCase();
+        const val = metaMatch[2].trim();
+        if (val) {
+          if (key === "ti") metadata.title = [val];
+          else if (key === "ar") metadata.artist = [val];
+          else if (key === "al") metadata.album = [val];
+          else if (key === "by") metadata.authors = [val];
+          else if (key === "offset") {
+            const off = parseInt(val, 10);
+            if (!Number.isNaN(off)) metadata.offset = off;
+          } else {
+            (metadata.rawProperties ??= {})[key] = [val];
+          }
+        }
+      }
+      continue;
+    }
 
     const header = LINE_HEADER_RE.exec(trimmed);
     if (!header) continue;
@@ -126,5 +162,8 @@ export const parseQRC = (text: string, detectBackground = true): LyricLine[] => 
     }
   }
 
-  return lines;
+  return {
+    lines,
+    metadata,
+  };
 };

@@ -101,8 +101,8 @@ export interface TTMLAgent {
 /** 音乐平台 ID 键 */
 export type TTMLPlatformId = "ncmMusicId" | "qqMusicId" | "spotifyId" | "appleMusicId" | string;
 
-/** TTML 歌词元数据信息 */
-export interface TTMLMetadata {
+/** 通用歌词元数据信息 */
+export interface LyricMetadata {
   /** 歌词主语言代码 (BCP-47) */
   language?: string;
   /** 计时模式 */
@@ -115,26 +115,30 @@ export interface TTMLMetadata {
   album?: string[];
   /** 国际标准录音制品代码 (ISRC) */
   isrc?: string[];
-  /** 词曲作者 */
+  /** 词曲作者/编曲 */
   songwriters?: string[];
+  /** 歌词制作者/LRC by/Author */
+  authors?: string[];
   /** 歌词制作者 ID/链接 */
   authorIds?: string[];
   /** 歌词制作者名称/账号 */
   authorNames?: string[];
-  /** 演唱者表（id 映射） */
+  /** 整体时间偏移量（毫秒，如 LRC [offset:+500]） */
+  offset?: number;
+  /** 演唱者/声部表（id 映射，如 v1, v2） */
   agents?: Record<string, TTMLAgent>;
   /** 各音乐平台对应歌曲 ID 映射 */
   platformIds?: Record<TTMLPlatformId, string[]>;
-  /** 其他自定义/未分类属性 */
+  /** 其他自定义/未分类属性标签 */
   rawProperties?: Record<string, string[]>;
 }
 
-/** TTML 完整解析结果（包含元数据） */
-export interface TTMLResult {
+/** 统一歌词解析结果 */
+export interface LyricResult {
   /** 解析出的歌词行列表 */
   lines: LyricLine[];
-  /** 歌曲与制作元数据 */
-  metadata: TTMLMetadata;
+  /** 歌曲元数据 */
+  metadata: LyricMetadata;
 }
 
 /** DOMParser 兼容接口（适用于浏览器 DOMParser 或 Node 端 xmldom / jsdom / happy-dom） */
@@ -144,29 +148,16 @@ export interface DOMParserLike {
 
 export type DOMParserConstructor = new () => DOMParserLike;
 
-/** 解析歌词的通用配置选项 */
-export interface ParseLyricOptions {
-  /** 是否检测括号提取背景歌词行，默认为 true */
+/** 统一歌词解析配置选项 */
+export interface ParseOptions {
+  /** 是否检测括号提取背景歌词行，默认为 false */
   detectBackground?: boolean;
-  /** 偏好翻译语言标签（如 zh-CN），用于 TTML 等内嵌多语言翻译 */
+  /** 是否提取元数据，默认为 false */
+  extractMetadata?: boolean;
+  /** 偏好翻译语言标签（如 zh-CN），用于 TTML 等挑选多语言轨道 */
   preferredLang?: string;
-  /** 是否返回完整包含 metadata 的结果对象（仅对支持元数据的格式如 TTML 生效） */
-  full?: boolean;
-  /** 可选注入的 XML DOMParser（在纯 Node 环境解析 TTML 时使用） */
+  /** 可选注入的 XML DOMParser（在纯 Node 环境解析 TTML 或 QRC XML 时使用） */
   domParser?: DOMParserLike | DOMParserConstructor;
-}
-
-/** 解析 TTML 歌词的配置选项 */
-export interface ParseTTMLOptions extends ParseLyricOptions {
-  /** 是否返回完整结果（包含歌词行与元数据） */
-  full?: boolean;
-}
-
-/** TTML 解析函数重载签名接口 */
-export interface ParseTTMLFunction {
-  (text: string, options: ParseTTMLOptions & { full: true }): TTMLResult;
-  (text: string, options?: (ParseTTMLOptions & { full?: false }) | string): LyricLine[];
-  (text: string, options?: ParseTTMLOptions | string): LyricLine[] | TTMLResult;
 }
 
 /** 元数据行清理配置选项 */

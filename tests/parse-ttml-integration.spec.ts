@@ -149,7 +149,7 @@ const RUBY_XML = `<tt xmlns="http://www.w3.org/ns/ttml"
 
 describe("AMLL TTML 对齐集成测试", () => {
   it("应完全解析 AMLL complex-test-song 的所有元数据", () => {
-    const result = parseTTML(COMPLEX_XML, { full: true });
+    const result = parseTTML(COMPLEX_XML, { extractMetadata: true });
 
     expect(result.metadata.language).toBe("ja");
     expect(result.metadata.timingMode).toBe("Word");
@@ -173,7 +173,10 @@ describe("AMLL TTML 对齐集成测试", () => {
   });
 
   it("应完全解析 AMLL complex-test-song 的歌词行、分段与特性", () => {
-    const lines = parseTTML(COMPLEX_XML, { preferredLang: "zh-Hans-CN" });
+    const { lines } = parseTTML(COMPLEX_XML, {
+      preferredLang: "zh-Hans-CN",
+      detectBackground: true,
+    });
 
     // 包含 L1, L2, L3 以及 L3 的背景音行
     expect(lines).toHaveLength(4);
@@ -251,7 +254,7 @@ describe("AMLL TTML 对齐集成测试", () => {
   });
 
   it("应解析 ruby-test-song 中的纯秒数时间与多个连续注音", () => {
-    const lines = parseTTML(RUBY_XML);
+    const { lines } = parseTTML(RUBY_XML);
 
     expect(lines).toHaveLength(1);
     const line = lines[0];
@@ -316,7 +319,7 @@ describe("AMLL TTML 对齐集成测试", () => {
         </div>
     </body>
 </tt>`;
-    const lines = parseTTML(duetXml);
+    const { lines } = parseTTML(duetXml, { detectBackground: true });
     expect(lines).toHaveLength(4);
 
     expect(lines[0].isDuet).toBe(false);

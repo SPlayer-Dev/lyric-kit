@@ -1,5 +1,5 @@
 import { parseLyric } from "../parse";
-import type { LyricInput, LyricLine, SerializeLyricFormat } from "../types";
+import type { LyricInput, LyricLine, LyricResult, SerializeLyricFormat } from "../types";
 import { toEnhancedLrc, toLrc } from "./lrc";
 import { toSrt } from "./srt";
 import { toTtml } from "./ttml";
@@ -10,25 +10,30 @@ export { toTtml } from "./ttml";
 
 /**
  * 歌词序列化统一入口函数
- * @param input - 待序列化的歌词行数组或原始 LyricInput
+ * @param input - 待序列化的歌词行数组、LyricResult 解析结果或原始 LyricInput
  * @param target - 目标导出格式："lrc" | "elrc" | "ttml" | "srt"
  * @returns 格式化后的字符串；若无有效内容返回空字符串
  */
 export const serializeLyric = (
-  input: LyricLine[] | LyricInput,
+  input: LyricLine[] | LyricResult | LyricInput,
   target: SerializeLyricFormat = "lrc",
 ): string => {
-  const lines = Array.isArray(input) ? input : parseLyric(input);
-  if (!lines || lines.length === 0) return "";
+  const parsed = Array.isArray(input)
+    ? { lines: input, metadata: {} }
+    : "lines" in input
+      ? input
+      : parseLyric(input, undefined, { extractMetadata: true });
+
+  if (!parsed.lines || parsed.lines.length === 0) return "";
 
   switch (target) {
     case "ttml":
-      return toTtml(lines);
+      return toTtml(parsed);
     case "elrc":
-      return toEnhancedLrc(lines);
+      return toEnhancedLrc(parsed.lines);
     case "srt":
-      return toSrt(lines);
+      return toSrt(parsed.lines);
     default:
-      return toLrc(lines);
+      return toLrc(parsed.lines);
   }
 };

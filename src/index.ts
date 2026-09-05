@@ -49,18 +49,16 @@ export type {
   LyricInput,
   LyricLanguage,
   LyricLine,
+  LyricMetadata,
+  LyricResult,
   LyricSource,
   LyricSpan,
   LyricWord,
-  ParseLyricOptions,
-  ParseTTMLFunction,
-  ParseTTMLOptions,
+  ParseOptions,
   SerializeLyricFormat,
   StripOptions,
   TTMLAgent,
-  TTMLMetadata,
   TTMLPlatformId,
-  TTMLResult,
 } from "./types";
 export { DEFAULT_LYRIC_FORMAT_ORDER } from "./types";
 

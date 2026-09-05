@@ -1,5 +1,5 @@
 import { normalizeKangxi } from "../clean/kangxi";
-import type { LyricFormat, LyricInput, LyricLine, ParseLyricOptions } from "../types";
+import type { LyricFormat, LyricInput, LyricLine, LyricResult, ParseOptions } from "../types";
 import { DEFAULT_LYRIC_FORMAT_ORDER } from "../types";
 import { parseASS } from "./ass";
 import { parseKRC } from "./krc";
@@ -16,12 +16,7 @@ export { parseLRC } from "./lrc";
 export { parseLyS } from "./lys";
 export { parseQRC } from "./qrc";
 export { parseSRT } from "./srt";
-export type {
-  DOMParserConstructor,
-  DOMParserLike,
-  ParseTTMLFunction,
-  ParseTTMLOptions,
-} from "./ttml";
+export type { DOMParserConstructor, DOMParserLike } from "./ttml";
 export { parseTTML } from "./ttml";
 export { parseYRC } from "./yrc";
 
@@ -69,6 +64,7 @@ export const detectFormat = (text: string): LyricFormat => {
   if (/\[\d+,\d+\]\(\d+,\d+,\d+\)/.test(text)) return "yrc";
   if (/\[\d+,\d+\][^[\n]+\(\d+,\d+\)/.test(text)) return "qrc";
   if (/^\[\d\][^[\]]+\(\d+,\d+\)/m.test(text)) return "lys";
+  if (/\[id:\$\d+\]/i.test(text) || /<\d+,\d+(?:,\d+)?>/.test(text)) return "krc";
   return "lrc";
 };
 
@@ -77,34 +73,30 @@ export const detectFormat = (text: string): LyricFormat => {
  * @param text - 待解析的歌词文本
  * @param format - 歌词格式
  * @param options - 解析配置选项
- * @returns 解析后的歌词行数组
+ * @returns 解析后的歌词结果对象
  */
 const parseContent = (
   text: string,
   format: LyricFormat,
-  options: ParseLyricOptions = {},
-): LyricLine[] => {
-  const detectBackground = options.detectBackground !== false;
+  options: ParseOptions = {},
+): LyricResult => {
   switch (format) {
     case "ttml":
-      return parseTTML(text, {
-        preferredLang: options.preferredLang,
-        domParser: options.domParser,
-      });
+      return parseTTML(text, options);
     case "qrc":
-      return parseQRC(text, detectBackground);
+      return parseQRC(text, options);
     case "krc":
-      return parseKRC(text, detectBackground);
+      return parseKRC(text, options);
     case "yrc":
-      return parseYRC(text, detectBackground);
+      return parseYRC(text, options);
     case "lrc":
-      return parseLRC(text, detectBackground);
+      return parseLRC(text, options);
     case "lys":
-      return parseLyS(text);
+      return parseLyS(text, options);
     case "srt":
-      return parseSRT(text);
+      return parseSRT(text, options);
     case "ass":
-      return parseASS(text);
+      return parseASS(text, options);
   }
 };
 
@@ -162,23 +154,24 @@ export const pairTranslation = (
  * @param input - 歌词输入载荷（纯字符串或 LyricInput 对象）
  * @param format - 可选显式格式（默认自动嗅探）
  * @param options - 解析配置选项
- * @returns 标准化歌词行数组
+ * @returns 歌词解析结果
  */
 export const parseLyric = (
   input: string | LyricInput,
   format?: LyricFormat,
-  options: ParseLyricOptions = {},
-): LyricLine[] => {
+  options: ParseOptions = {},
+): LyricResult => {
   const payload: LyricInput = typeof input === "string" ? { content: input } : input;
   const actualFormat = format || detectFormat(payload.content);
 
-  const lines = parseContent(normalizeKangxi(payload.content), actualFormat, options);
+  const mainResult = parseContent(normalizeKangxi(payload.content), actualFormat, options);
+  const lines = mainResult.lines;
 
   if (payload.translation) {
     const transFormat = payload.translationFormat || detectFormat(payload.translation);
     pairTranslation(
       lines,
-      parseContent(normalizeKangxi(payload.translation), transFormat, options),
+      parseContent(normalizeKangxi(payload.translation), transFormat, options).lines,
       "translatedLyric",
     );
   }
@@ -187,10 +180,13 @@ export const parseLyric = (
     const romajiFormat = payload.romajiFormat || detectFormat(payload.romaji);
     pairTranslation(
       lines,
-      parseContent(normalizeKangxi(payload.romaji), romajiFormat, options),
+      parseContent(normalizeKangxi(payload.romaji), romajiFormat, options).lines,
       "romanLyric",
     );
   }
 
-  return lines;
+  return {
+    lines,
+    metadata: mainResult.metadata,
+  };
 };

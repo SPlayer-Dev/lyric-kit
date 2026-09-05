@@ -2,17 +2,16 @@ import type {
   DOMParserConstructor,
   DOMParserLike,
   LyricLine,
+  LyricMetadata,
+  LyricResult,
   LyricWord,
-  ParseTTMLFunction,
-  ParseTTMLOptions,
+  ParseOptions,
   TTMLAgent,
-  TTMLMetadata,
   TTMLPlatformId,
-  TTMLResult,
 } from "../types";
 import { parseTTMLTime } from "../utils/timestamp";
 
-export type { DOMParserConstructor, DOMParserLike, ParseTTMLFunction, ParseTTMLOptions };
+export type { DOMParserConstructor, DOMParserLike };
 
 const NS = {
   TT: "http://www.w3.org/ns/ttml",
@@ -267,15 +266,17 @@ export const alignRomanization = (mainWords: LyricWord[], romanWords: LyricWord[
 /**
  * 解析文档头部元数据与翻译/音译 Sidecar
  * @param doc - XML 文档对象
+ * @param detectBackground - 是否剥除背景音括号，默认为 false
  * @returns 包含元数据和 Sidecar 映射的对象
  */
 const parseHead = (
   doc: Document,
+  detectBackground = false,
 ): {
-  metadata: TTMLMetadata;
+  metadata: LyricMetadata;
   sidecar: SidecarMap;
 } => {
-  const metadata: TTMLMetadata = {
+  const metadata: LyricMetadata = {
     title: [],
     artist: [],
     album: [],
@@ -498,7 +499,8 @@ const parseHead = (
             }
 
             mainText = normalizeText(mainText);
-            bgText = stripParens(normalizeText(bgText));
+            const normalizedBg = normalizeText(bgText);
+            bgText = detectBackground ? stripParens(normalizedBg) : normalizedBg;
             if (!mainText && !bgText) continue;
 
             if (!sidecar[forId]) sidecar[forId] = {};
@@ -561,7 +563,7 @@ interface ParsedParagraphState {
  * @param options - TTML 解析配置选项
  * @returns DOMParser 实例
  */
-const resolveDomParser = (options?: ParseTTMLOptions): DOMParserLike => {
+const resolveDomParser = (options?: ParseOptions): DOMParserLike => {
   if (options?.domParser) {
     if (typeof options.domParser === "function") {
       const Ctor = options.domParser as DOMParserConstructor;
@@ -580,25 +582,21 @@ const resolveDomParser = (options?: ParseTTMLOptions): DOMParserLike => {
 /**
  * 解析 TTML 格式歌词文本
  * @param text - 符合 TTML 规范的 XML 歌词字符串
- * @param options - 可选的解析配置对象或偏好语言代码
- * @returns 解析后的歌词行列表或包含完整元数据的解析结果
+ * @param options - 解析配置选项
+ * @returns 歌词解析结果
  */
-export const parseTTML: ParseTTMLFunction = ((
-  text: string,
-  options?: ParseTTMLOptions | string,
-): LyricLine[] | TTMLResult => {
-  const opts: ParseTTMLOptions =
-    typeof options === "string" ? { preferredLang: options } : (options ?? {});
-
-  const preferredLang = opts.preferredLang ?? "";
-  const parser = resolveDomParser(opts);
+export const parseTTML = (text: string, options?: ParseOptions): LyricResult => {
+  const detectBackground = options?.detectBackground ?? false;
+  const extractMetadata = options?.extractMetadata ?? false;
+  const preferredLang = options?.preferredLang ?? "";
+  const parser = resolveDomParser(options);
   const doc = parser.parseFromString(text, "application/xml");
 
   if (doc.querySelector?.("parsererror") || doc.getElementsByTagName("parsererror")[0]) {
     throw new Error("Invalid TTML XML");
   }
 
-  const { metadata, sidecar } = parseHead(doc);
+  const { metadata, sidecar } = parseHead(doc, detectBackground);
 
   const root = doc.documentElement;
   if (root) {
@@ -747,21 +745,25 @@ export const parseTTML: ParseTTMLFunction = ((
             if (pEnd) bgEndMs = parseTTMLTime(pEnd);
           }
 
-          // 剥除背景音首尾括号
-          if (bgState.words.length > 0) {
-            const first = bgState.words[0];
-            first.word = first.word.replace(/^[(（]+/, "").trimStart();
-            if (!first.word) bgState.words.shift();
-
+          // 仅在显式开启 detectBackground 时剥除背景音首尾括号
+          if (detectBackground) {
             if (bgState.words.length > 0) {
-              const last = bgState.words[bgState.words.length - 1];
-              last.word = last.word.replace(/[)）]+$/, "").trimEnd();
-              if (!last.word) bgState.words.pop();
+              const first = bgState.words[0];
+              first.word = first.word.replace(/^[(（]+/, "").trimStart();
+              if (!first.word) bgState.words.shift();
+
+              if (bgState.words.length > 0) {
+                const last = bgState.words[bgState.words.length - 1];
+                last.word = last.word.replace(/[)）]+$/, "").trimEnd();
+                if (!last.word) bgState.words.pop();
+              }
             }
           }
 
           // 若背景音无逐字 span，回退为单词行
-          const cleanBgText = stripParens(bgState.fullText);
+          const cleanBgText = detectBackground
+            ? stripParens(bgState.fullText)
+            : bgState.fullText.trim();
           if (bgState.words.length === 0 && cleanBgText) {
             bgState.words.push({
               word: cleanBgText,
@@ -1039,12 +1041,8 @@ export const parseTTML: ParseTTMLFunction = ((
     metadata.timingMode = hasWordTiming ? "Word" : "Line";
   }
 
-  if (opts.full) {
-    return {
-      lines: resultLines,
-      metadata,
-    };
-  }
-
-  return resultLines;
-}) as ParseTTMLFunction;
+  return {
+    lines: resultLines,
+    metadata: extractMetadata ? metadata : {},
+  };
+};
