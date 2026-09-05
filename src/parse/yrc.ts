@@ -1,3 +1,4 @@
+import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
 
@@ -69,14 +70,14 @@ const parseYrcWords = (rest: string): LyricWord[] => {
  * @param options - 解析配置选项
  * @returns 歌词解析结果
  */
-export const parseYRC = (text: string, options?: ParseOptions): LyricResult => {
-  const detectBackground = options?.detectBackground ?? false;
-  const extractMetadata = options?.extractMetadata ?? false;
+export const parseYRC = (text: string, options: ParseOptions = {}): LyricResult => {
+  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const metadata: LyricMetadata = extractMetadata ? { timingMode: "Word" } : {};
   const lines: LyricLine[] = [];
 
-  for (const raw of text.split("\n")) {
+  for (const raw of content.split("\n")) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
 

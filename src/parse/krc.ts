@@ -1,5 +1,6 @@
+import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
-import { detectBackgroundLine } from "../utils/bg";
+import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
 import { parseTime } from "../utils/timestamp";
 
 /** 行头时间戳：[mm:ss.xxx] / [mm:ss:xxx] */
@@ -31,16 +32,17 @@ const decodeBase64Utf8 = (str: string): string => {
  * @param options - 解析配置选项
  * @returns 歌词解析结果
  */
-export const parseKRC = (text: string, options?: ParseOptions): LyricResult => {
-  const detectBackground = options?.detectBackground ?? false;
-  const extractMetadata = options?.extractMetadata ?? false;
+export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult => {
+  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const metadata: LyricMetadata = extractMetadata ? { timingMode: "Word" } : {};
   const lines: LyricLine[] = [];
   let krcTranslations: string[] = [];
   let krcRomanizations: string[] = [];
+  let lineIndex = 0;
 
-  for (const raw of text.split("\n")) {
+  for (const raw of content.split("\n")) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
 
@@ -150,25 +152,20 @@ export const parseKRC = (text: string, options?: ParseOptions): LyricResult => {
     if (words.length === 0) continue;
 
     const calculatedEnd = lineDur > 0 ? lineStart + lineDur : lastEnd;
-    lines.push({
+    const line: LyricLine = {
       words,
-      translatedLyric: "",
-      romanLyric: "",
+      translatedLyric: krcTranslations[lineIndex] ?? "",
+      romanLyric: krcRomanizations[lineIndex] ?? "",
       startTime: lineStart,
       endTime: calculatedEnd,
       isBG: detectBackgroundLine(words, detectBackground),
       isDuet: false,
-    });
-  }
-
-  if (krcTranslations.length > 0 || krcRomanizations.length > 0) {
-    for (let i = 0; i < lines.length; i++) {
-      if (i < krcTranslations.length && krcTranslations[i]) {
-        lines[i].translatedLyric = krcTranslations[i];
-      }
-      if (i < krcRomanizations.length && krcRomanizations[i]) {
-        lines[i].romanLyric = krcRomanizations[i];
-      }
+    };
+    lineIndex++;
+    lines.push(line);
+    if (!line.isBG) {
+      const bg = splitTrailingBackground(line, detectBackground);
+      if (bg) lines.push(bg);
     }
   }
 

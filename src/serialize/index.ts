@@ -11,7 +11,8 @@ export { toTtml } from "./ttml";
 /**
  * 歌词序列化统一入口函数
  * @param input - 待序列化的歌词行数组、LyricResult 解析结果或原始 LyricInput
- * @param target - 目标导出格式："lrc" | "elrc" | "ttml" | "srt"
+ * @param target - 目标导出格式
+ * @default "lrc"
  * @returns 格式化后的字符串；若无有效内容返回空字符串
  */
 export const serializeLyric = (
@@ -22,7 +23,7 @@ export const serializeLyric = (
     ? { lines: input, metadata: {} }
     : "lines" in input
       ? input
-      : parseLyric(input, undefined, { extractMetadata: true });
+      : parseLyric(input, { extractMetadata: true });
 
   if (!parsed.lines || parsed.lines.length === 0) return "";
 

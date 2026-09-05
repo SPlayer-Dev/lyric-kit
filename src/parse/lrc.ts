@@ -1,3 +1,4 @@
+import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
 import { ANGLE_TIME_RE, BRACKET_TIME_RE, MAX_TIME, parseTime } from "../utils/timestamp";
@@ -214,14 +215,14 @@ const parseLrcPayload = (line: string, detectBackground: boolean): LyricLine[] =
  * @param options - 解析配置选项
  * @returns 歌词解析结果
  */
-export const parseLRC = (text: string, options?: ParseOptions): LyricResult => {
-  const detectBackground = options?.detectBackground ?? false;
-  const extractMetadata = options?.extractMetadata ?? false;
+export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult => {
+  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const metadata: LyricMetadata = {};
   const lines: LyricLine[] = [];
 
-  for (const rawLine of text.split("\n")) {
+  for (const rawLine of content.split("\n")) {
     const trimmed = rawLine.trim();
     if (!trimmed) continue;
 
@@ -269,25 +270,36 @@ export const parseLRC = (text: string, options?: ParseOptions): LyricResult => {
 
   const merged: LyricLine[] = [];
   for (const line of lines) {
-    const prev = merged[merged.length - 1];
-    if (prev && prev.startTime === line.startTime) {
+    let target: LyricLine | undefined;
+    for (let i = merged.length - 1; i >= 0; i--) {
+      if (merged[i].startTime === line.startTime && merged[i].isBG === line.isBG) {
+        target = merged[i];
+        break;
+      }
+    }
+    if (target) {
       const lineText = line.words
         .map((w) => w.word)
         .join("")
         .trim();
       if (!lineText) continue;
-      if (!prev.translatedLyric) prev.translatedLyric = lineText;
-      else if (!prev.romanLyric) prev.romanLyric = lineText;
-      continue;
+      if (!target.translatedLyric) {
+        target.translatedLyric = lineText;
+        continue;
+      }
+      if (!target.romanLyric) {
+        target.romanLyric = lineText;
+        continue;
+      }
     }
     merged.push(line);
   }
 
-  let lastStartTime = MAX_TIME;
+  let nextDistinctStartTime = MAX_TIME;
   for (let i = merged.length - 1; i >= 0; i--) {
     const line = merged[i];
     if (line.endTime <= line.startTime) {
-      line.endTime = lastStartTime;
+      line.endTime = nextDistinctStartTime;
     }
     const lastWord = line.words[line.words.length - 1];
     if (lastWord && lastWord.endTime <= lastWord.startTime) {
@@ -296,7 +308,10 @@ export const parseLRC = (text: string, options?: ParseOptions): LyricResult => {
     if (line.words.length === 1 && line.words[0].endTime <= line.words[0].startTime) {
       line.words[0].endTime = line.endTime;
     }
-    lastStartTime = line.startTime;
+    const prevLine = merged[i - 1];
+    if (!prevLine || prevLine.startTime < line.startTime) {
+      nextDistinctStartTime = line.startTime;
+    }
   }
 
   const resultLines = merged.filter(

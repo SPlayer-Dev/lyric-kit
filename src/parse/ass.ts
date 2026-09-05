@@ -1,3 +1,4 @@
+import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 
 /** 匹配 Dialogue 行时间戳、Style 与 Name（Speaker）字段 */
@@ -83,12 +84,14 @@ interface DialogueLine {
  * @param options - 解析配置选项
  * @returns 歌词解析结果
  */
-export const parseASS = (text: string, options?: ParseOptions): LyricResult => {
-  const extractMetadata = options?.extractMetadata ?? false;
+export const parseASS = (text: string, options: ParseOptions = {}): LyricResult => {
+  const { extractMetadata = false, cleanKangxi = false } = options;
+  const content = cleanKangxi ? normalizeKangxi(text) : text;
+
   const metadata: LyricMetadata = {};
   const dialogues: DialogueLine[] = [];
 
-  for (const raw of text.split("\n")) {
+  for (const raw of content.split("\n")) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
 

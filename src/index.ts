@@ -18,7 +18,6 @@ export { stripLyricMetadata } from "./clean/stripper";
 
 // 解析器
 export {
-  bestExternalIndex,
   detectFormat,
   pairTranslation,
   parseASS,
@@ -60,7 +59,6 @@ export type {
   TTMLAgent,
   TTMLPlatformId,
 } from "./types";
-export { DEFAULT_LYRIC_FORMAT_ORDER } from "./types";
 
 // 播放同步与行处理
 export { detectBackgroundLine, splitTrailingBackground } from "./utils/bg";

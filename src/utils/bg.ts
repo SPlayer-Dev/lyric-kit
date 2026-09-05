@@ -1,12 +1,18 @@
 import type { LyricLine, LyricWord } from "../types";
 
-/** 行首括号（全 / 半角），允许前导空格 */
+/** 行首括号（全 / 半角），允许前导空白 */
 const OPEN_PAREN_RE = /^\s*[（(]/;
 
-/** 行尾括号（全 / 半角），允许尾随空格 */
-const CLOSE_PAREN_RE = /[）)]\s*$/;
+/** 闭括号后允许尾随的语气标点符号与空白字符集 */
+const TRAILING_PUNCT_CLASS = "[!?,.~!！?？，。~…、:：\\s]";
 
-/** 汉字 */
+/** 闭括号及允许尾随的常见标点符号和空格 */
+const CLOSE_PAREN_RE = new RegExp(`[）)]${TRAILING_PUNCT_CLASS}*$`, "u");
+
+/** 仅由允许的语气标点与空白组成的正则 */
+const TRAILING_PUNCT_ONLY_RE = new RegExp(`^${TRAILING_PUNCT_CLASS}*$`, "u");
+
+/** 汉字匹配 */
 const HAN_RE = /\p{Script=Han}/u;
 
 /** 日文假名 */
@@ -20,15 +26,49 @@ const KANA_ONLY_RE = /^[\p{Script=Hiragana}\p{Script=Katakana}\u30fc\s]+$/u;
 const joinedWords = (words: LyricWord[]): string => words.map((word) => word.word).join("");
 
 /**
- * 剥除文本两端的括号与空白字符
+ * 剥除文本两端的括号、尾随语气标点与空白字符
  * @param text - 待处理文本
- * @returns 剥除括号后的文本
+ * @returns 剥除括号与标点后的纯文本
  */
-const stripParens = (text: string): string =>
+export const stripParensAndPunctuation = (text: string): string =>
   text
     .replace(/^[\s（(]+/, "")
-    .replace(/[）)\s]+$/, "")
+    .replace(CLOSE_PAREN_RE, "")
     .trim();
+
+/**
+ * 检查文本是否被单一对外部括号完整包裹（中途未提前闭合，防止首尾假象）
+ * @param text - 待检查的完整行文本
+ * @returns 是否整行完全由同一对括号包裹
+ */
+export const isFullyEnclosedByParens = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("(") && !trimmed.startsWith("（")) {
+    return false;
+  }
+  let depth = 0;
+  let firstCloseAtEnd = -1;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const char = trimmed[i];
+    if (char === "(" || char === "（") {
+      depth++;
+    } else if (char === ")" || char === "）") {
+      depth--;
+      if (depth < 0) return false;
+      if (depth === 0) {
+        const remaining = trimmed.slice(i + 1);
+        if (TRAILING_PUNCT_ONLY_RE.test(remaining)) {
+          firstCloseAtEnd = i;
+          break;
+        }
+        return false;
+      }
+    }
+  }
+
+  return depth === 0 && firstCloseAtEnd !== -1;
+};
 
 /**
  * 判断当前尾随括号内容是否为汉字后跟随的假名注音
@@ -40,24 +80,53 @@ const isJapaneseRubyTail = (words: LyricWord[], openIndex: number): boolean => {
   const before = joinedWords(words.slice(0, openIndex)).trim();
   const prevChar = Array.from(before).at(-1) ?? "";
   if (!HAN_RE.test(prevChar)) return false;
-  const rubyText = stripParens(joinedWords(words.slice(openIndex)));
+  const rubyText = stripParensAndPunctuation(joinedWords(words.slice(openIndex)));
   return !!rubyText && KANA_ONLY_RE.test(rubyText);
 };
 
 /**
- * 检测整行是否为背景人声并就地剥离包裹括号
- * @param words - 行内单词数组，命中时原地修改首尾单词
+ * 检测整行是否为背景人声并就地剥离包裹括号（清除空节点并保持时间跨度）
+ * @param words - 行内单词数组，命中时原地修改首尾单词并清理空节点
  * @param enabled - 是否启用括号启发式检测
  * @returns 是否为背景人声行
  */
 export const detectBackgroundLine = (words: LyricWord[], enabled = true): boolean => {
-  if (!enabled) return false;
-  if (words.length === 0) return false;
-  const first = words[0];
-  const last = words[words.length - 1];
-  if (!OPEN_PAREN_RE.test(first.word) || !CLOSE_PAREN_RE.test(last.word)) return false;
-  first.word = first.word.replace(OPEN_PAREN_RE, "");
-  last.word = last.word.replace(CLOSE_PAREN_RE, "");
+  if (!enabled || words.length === 0) return false;
+
+  const fullText = joinedWords(words);
+  if (!isFullyEnclosedByParens(fullText)) return false;
+
+  const innerText = stripParensAndPunctuation(fullText);
+  if (!innerText) return false;
+
+  const originalStartTime = words[0].startTime;
+  const originalEndTime = words[words.length - 1].endTime;
+
+  for (let i = 0; i < words.length; i++) {
+    if (OPEN_PAREN_RE.test(words[i].word)) {
+      words[i].word = words[i].word.replace(OPEN_PAREN_RE, "");
+      break;
+    }
+  }
+
+  for (let i = words.length - 1; i >= 0; i--) {
+    if (CLOSE_PAREN_RE.test(words[i].word)) {
+      words[i].word = words[i].word.replace(CLOSE_PAREN_RE, "");
+      break;
+    }
+  }
+
+  const cleaned = words.filter((w) => w.word !== "");
+  if (cleaned.length === 0) return false;
+
+  cleaned[0].startTime = Math.min(cleaned[0].startTime, originalStartTime);
+  cleaned[cleaned.length - 1].endTime = Math.max(
+    cleaned[cleaned.length - 1].endTime,
+    originalEndTime,
+  );
+
+  words.length = 0;
+  words.push(...cleaned);
   return true;
 };
 
@@ -70,29 +139,123 @@ export const detectBackgroundLine = (words: LyricWord[], enabled = true): boolea
 export const splitTrailingBackground = (line: LyricLine, enabled = true): LyricLine | null => {
   if (!enabled) return null;
   const words = line.words;
-  if (words.length < 2) return null;
-  // 整行包裹交给 detectBackgroundLine，这里只管行内尾随
-  if (OPEN_PAREN_RE.test(words[0].word)) return null;
-  if (!CLOSE_PAREN_RE.test(words[words.length - 1].word)) return null;
-  // 从尾向前找配对的开括号字；须留出前面的主歌词，故下标 ≥ 1
+  if (words.length === 0) return null;
+
+  if (words.length === 1) {
+    const text = words[0].word;
+    const trimmed = text.trimEnd();
+    if (!CLOSE_PAREN_RE.test(trimmed)) return null;
+
+    const closeIdx = trimmed.search(CLOSE_PAREN_RE);
+    if (closeIdx === -1) return null;
+
+    let depth = 0;
+    let openIdx = -1;
+    for (let i = closeIdx; i >= 0; i--) {
+      const char = trimmed[i];
+      if (char === ")" || char === "）") {
+        depth++;
+      } else if (char === "(" || char === "（") {
+        depth--;
+        if (depth === 0) {
+          openIdx = i;
+          break;
+        }
+      }
+    }
+
+    if (openIdx <= 0) return null;
+
+    const mainPart = trimmed.slice(0, openIdx).trimEnd();
+    if (!mainPart) return null;
+
+    const bgPart = trimmed.slice(openIdx);
+    const bgContent = stripParensAndPunctuation(bgPart);
+    if (!bgContent) return null;
+
+    const prevChar = Array.from(mainPart).at(-1) ?? "";
+    if (HAN_RE.test(prevChar) && KANA_ONLY_RE.test(bgContent)) return null;
+
+    words[0].word = mainPart;
+    return {
+      words: [
+        {
+          startTime: line.startTime,
+          endTime: line.endTime,
+          word: bgContent,
+        },
+      ],
+      translatedLyric: "",
+      romanLyric: "",
+      startTime: line.startTime,
+      endTime: line.endTime,
+      isBG: true,
+      isDuet: line.isDuet,
+    };
+  }
+
+  const lastWord = words[words.length - 1];
+  if (!CLOSE_PAREN_RE.test(lastWord.word)) return null;
+
+  let depth = 0;
   let openIndex = -1;
-  for (let index = words.length - 1; index >= 1; index--) {
-    if (OPEN_PAREN_RE.test(words[index].word)) {
-      openIndex = index;
+
+  for (let index = words.length - 1; index >= 0; index--) {
+    const wordText = words[index].word;
+    for (let charIdx = wordText.length - 1; charIdx >= 0; charIdx--) {
+      const char = wordText[charIdx];
+      if (char === ")" || char === "）") {
+        depth++;
+      } else if (char === "(" || char === "（") {
+        depth--;
+        if (depth === 0) {
+          openIndex = index;
+          break;
+        }
+      }
+    }
+    if (depth === 0 && openIndex !== -1) break;
+  }
+
+  if (openIndex < 1) return null;
+  if (isJapaneseRubyTail(words, openIndex)) return null;
+
+  const bgWords: LyricWord[] = words.slice(openIndex).map((word) => ({ ...word }));
+  const bgRawText = stripParensAndPunctuation(joinedWords(bgWords));
+  if (!bgRawText) return null;
+
+  const originalBgStart = bgWords[0].startTime;
+  const originalBgEnd = bgWords[bgWords.length - 1].endTime;
+
+  for (let i = 0; i < bgWords.length; i++) {
+    if (OPEN_PAREN_RE.test(bgWords[i].word)) {
+      bgWords[i].word = bgWords[i].word.replace(OPEN_PAREN_RE, "");
       break;
     }
   }
-  if (openIndex < 1) return null;
-  if (isJapaneseRubyTail(words, openIndex)) return null;
-  // 克隆尾随段，剥首尾括号、丢掉因独立括号字而变空的字；未命中时不污染原 words
-  const bgWords: LyricWord[] = words.slice(openIndex).map((word) => ({ ...word }));
-  bgWords[0].word = bgWords[0].word.replace(OPEN_PAREN_RE, "");
-  bgWords[bgWords.length - 1].word = bgWords[bgWords.length - 1].word.replace(CLOSE_PAREN_RE, "");
+
+  for (let i = bgWords.length - 1; i >= 0; i--) {
+    if (CLOSE_PAREN_RE.test(bgWords[i].word)) {
+      bgWords[i].word = bgWords[i].word.replace(CLOSE_PAREN_RE, "");
+      break;
+    }
+  }
+
   const cleaned = bgWords.filter((word) => word.word !== "");
   if (cleaned.length === 0) return null;
-  // 主行裁掉尾随段并收紧 endTime
-  line.words = words.slice(0, openIndex);
+
+  cleaned[0].startTime = Math.min(cleaned[0].startTime, originalBgStart);
+  cleaned[cleaned.length - 1].endTime = Math.max(
+    cleaned[cleaned.length - 1].endTime,
+    originalBgEnd,
+  );
+
+  const mainWords = words.slice(0, openIndex).filter((w) => w.word !== "");
+  if (mainWords.length === 0) return null;
+
+  line.words = mainWords;
   line.endTime = line.words[line.words.length - 1].endTime;
+
   return {
     words: cleaned,
     translatedLyric: "",
@@ -100,6 +263,6 @@ export const splitTrailingBackground = (line: LyricLine, enabled = true): LyricL
     startTime: cleaned[0].startTime,
     endTime: cleaned[cleaned.length - 1].endTime,
     isBG: true,
-    isDuet: false,
+    isDuet: line.isDuet,
   };
 };

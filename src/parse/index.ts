@@ -1,6 +1,5 @@
-import { normalizeKangxi } from "../clean/kangxi";
+import { isMeaningfulTranslation } from "../clean/meaningful";
 import type { LyricFormat, LyricInput, LyricLine, LyricResult, ParseOptions } from "../types";
-import { DEFAULT_LYRIC_FORMAT_ORDER } from "../types";
 import { parseASS } from "./ass";
 import { parseKRC } from "./krc";
 import { parseLRC } from "./lrc";
@@ -24,34 +23,10 @@ export { parseYRC } from "./yrc";
 const ALIGN_TOLERANCE_MS = 300;
 
 /**
- * 从外部歌词列表中选出最优格式的索引
- * @param lyrics - 外部歌词列表
- * @param priority - 自定义格式优先级列表
- * @returns 最优格式的索引，无可用歌词时返回 -1
- */
-export const bestExternalIndex = (
-  lyrics: { format: LyricFormat }[],
-  priority?: readonly LyricFormat[],
-): number => {
-  if (lyrics.length === 0) return -1;
-  const order = priority && priority.length > 0 ? priority : DEFAULT_LYRIC_FORMAT_ORDER;
-  let bestIdx = 0;
-  let bestPriority = order.length;
-  for (let i = 0; i < lyrics.length; i++) {
-    const p = order.indexOf(lyrics[i].format);
-    const rank = p === -1 ? order.length : p;
-    if (rank < bestPriority) {
-      bestPriority = rank;
-      bestIdx = i;
-    }
-  }
-  return bestIdx;
-};
-
-/**
  * 根据内容特征检测歌词格式
  * @param text - 歌词文本内容
- * @returns 检测到的格式，默认 "lrc"
+ * @returns 检测到的格式
+ * @default "lrc"
  */
 export const detectFormat = (text: string): LyricFormat => {
   const trimmed = text.trimStart();
@@ -112,14 +87,6 @@ const lineText = (line: LyricLine): string =>
     .trim();
 
 /**
- * 校验翻译文本是否包含有效歌词内容
- * @param text - 待检查的翻译文本
- * @returns 是否为有意义的翻译文本
- */
-const isMeaningfulTrans = (text: string): boolean =>
-  !!text && text !== "//" && !text.includes("作品的著作权");
-
-/**
  * 将翻译/音译歌词按时间戳对齐到主歌词行
  * @param lines - 主歌词行数组（原地修改）
  * @param transLines - 已解析的翻译/音译歌词行
@@ -138,7 +105,7 @@ export const pairTranslation = (
     const diff = lines[i].startTime - trans[j].startTime;
     if (Math.abs(diff) <= ALIGN_TOLERANCE_MS) {
       const text = lineText(trans[j]);
-      if (isMeaningfulTrans(text)) lines[i][field] = text;
+      if (isMeaningfulTranslation(text)) lines[i][field] = text;
       i++;
       j++;
     } else if (diff < 0) {
@@ -151,38 +118,30 @@ export const pairTranslation = (
 
 /**
  * 解析歌词主入口函数
- * @param input - 歌词输入载荷（纯字符串或 LyricInput 对象）
- * @param format - 可选显式格式（默认自动嗅探）
+ * @param input - 歌词输入载荷（纯文本字符串或 LyricInput 载荷对象）
  * @param options - 解析配置选项
  * @returns 歌词解析结果
  */
-export const parseLyric = (
-  input: string | LyricInput,
-  format?: LyricFormat,
-  options: ParseOptions = {},
-): LyricResult => {
+export const parseLyric = (input: string | LyricInput, options: ParseOptions = {}): LyricResult => {
   const payload: LyricInput = typeof input === "string" ? { content: input } : input;
-  const actualFormat = format || detectFormat(payload.content);
+  const { format } = options;
+  const actualFormat = format ?? payload.format ?? detectFormat(payload.content);
 
-  const mainResult = parseContent(normalizeKangxi(payload.content), actualFormat, options);
+  const mainResult = parseContent(payload.content, actualFormat, options);
   const lines = mainResult.lines;
 
   if (payload.translation) {
-    const transFormat = payload.translationFormat || detectFormat(payload.translation);
+    const transFormat = payload.translationFormat ?? detectFormat(payload.translation);
     pairTranslation(
       lines,
-      parseContent(normalizeKangxi(payload.translation), transFormat, options).lines,
+      parseContent(payload.translation, transFormat, options).lines,
       "translatedLyric",
     );
   }
 
   if (payload.romaji) {
-    const romajiFormat = payload.romajiFormat || detectFormat(payload.romaji);
-    pairTranslation(
-      lines,
-      parseContent(normalizeKangxi(payload.romaji), romajiFormat, options).lines,
-      "romanLyric",
-    );
+    const romajiFormat = payload.romajiFormat ?? detectFormat(payload.romaji);
+    pairTranslation(lines, parseContent(payload.romaji, romajiFormat, options).lines, "romanLyric");
   }
 
   return {

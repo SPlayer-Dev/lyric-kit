@@ -1,3 +1,4 @@
+import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricResult, ParseOptions } from "../types";
 
 /** 匹配 SRT 时间戳 HH:MM:SS,mmm */
@@ -26,9 +27,12 @@ const parseSrtTime = (value: string): number => {
  * @param _options - 解析配置选项
  * @returns 歌词解析结果
  */
-export const parseSRT = (text: string, options?: ParseOptions): LyricResult => {
+export const parseSRT = (text: string, options: ParseOptions = {}): LyricResult => {
+  const { cleanKangxi = false } = options;
+  const content = cleanKangxi ? normalizeKangxi(text) : text;
+
   const lines: LyricLine[] = [];
-  const blocks = text.replace(/\r\n/g, "\n").split(/\n\n+/);
+  const blocks = content.replace(/\r\n/g, "\n").split(/\n\n+/);
 
   for (const block of blocks) {
     const parts = block.trim().split("\n");
