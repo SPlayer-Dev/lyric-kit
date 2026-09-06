@@ -232,4 +232,14 @@ describe("parseTTML", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0].words[0].word).toBe("Test");
   });
+
+  it("应支持 4 段式 SMPTE 格式时间戳（HH:MM:SS:FF）", () => {
+    const xml = `<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="00:01:02:15" end="00:01:05:00"><span>SMPTE</span></p></div></body></tt>`;
+    const { lines } = parseTTML(xml);
+    expect(lines).toHaveLength(1);
+    // 00:01:02:15 = 1分2秒 + 15帧(按30fps估算500ms) = 62500ms
+    expect(lines[0].startTime).toBe(62500);
+    // 00:01:05:00 = 1分5秒 = 65000ms
+    expect(lines[0].endTime).toBe(65000);
+  });
 });

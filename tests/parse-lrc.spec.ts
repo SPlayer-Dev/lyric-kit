@@ -113,4 +113,97 @@ describe("parseLRC", () => {
     expect(lines[0].words[1].word).toBe("World");
     expect(lines[0].words[1].endsWithSpace).toBeUndefined();
   });
+
+  it("最后一行未提供结束时间时，应回退为 +8000ms 而非 16.7 小时", () => {
+    const text = `[00:10.00]只有一句歌词`;
+    const { lines } = parseLRC(text);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].startTime).toBe(10000);
+    expect(lines[0].endTime).toBe(18000);
+  });
+
+  it("空行不应包含在结果行中，但应在倒序扫描时正确截断前一行的 endTime", () => {
+    const text = `[00:10.00]第一句\n[00:15.00]\n[00:30.00]第二句`;
+    const { lines } = parseLRC(text);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0].words[0].word).toBe("第一句");
+    expect(lines[0].startTime).toBe(10000);
+    expect(lines[0].endTime).toBe(15000);
+
+    expect(lines[1].words[0].word).toBe("第二句");
+    expect(lines[1].startTime).toBe(30000);
+    expect(lines[1].endTime).toBe(38000);
+  });
+
+  it("指定 keepEmptyLines: true 时应保留间奏空行，起止时间界定完整间奏区间", () => {
+    const text = `[00:10.00]第一句\n[00:15.00]\n[00:30.00]第二句`;
+    const { lines } = parseLRC(text, { keepEmptyLines: true });
+
+    expect(lines).toHaveLength(3);
+    expect(lines[0].words[0].word).toBe("第一句");
+    expect(lines[0].startTime).toBe(10000);
+    expect(lines[0].endTime).toBe(15000);
+
+    expect(lines[1].words[0].word).toBe("");
+    expect(lines[1].startTime).toBe(15000);
+    expect(lines[1].endTime).toBe(30000);
+
+    expect(lines[2].words[0].word).toBe("第二句");
+    expect(lines[2].startTime).toBe(30000);
+    expect(lines[2].endTime).toBe(38000);
+  });
+
+  it("支持 applyOffset 选项将 offset 应用到所有行与词中", () => {
+    const text = `[offset:500]\n[00:01.00]<00:01.00>你<00:02.00>好`;
+    const { lines } = parseLRC(text, { extractMetadata: true, applyOffset: true });
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].startTime).toBe(15000 / 10 + 0); // 1000 + 500 = 1500
+    expect(lines[0].startTime).toBe(1500);
+    expect(lines[0].words[0].startTime).toBe(1500);
+    expect(lines[0].words[0].endTime).toBe(2500);
+  });
+
+  it("多时间戳逐字行应正确平移复制行的逐词时间戳", () => {
+    const text = `[00:01.00][00:05.00]<00:01.00>重复<00:02.00>词<00:03.00>`;
+    const { lines } = parseLRC(text);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0].startTime).toBe(1000);
+    expect(lines[0].words[0].startTime).toBe(1000);
+    expect(lines[0].words[1].startTime).toBe(2000);
+
+    // 第二句在 5000ms，相对偏移 4000ms
+    expect(lines[1].startTime).toBe(5000);
+    expect(lines[1].words[0].startTime).toBe(5000);
+    expect(lines[1].words[1].startTime).toBe(6000);
+    expect(lines[1].words[1].endTime).toBe(7000);
+  });
+
+  it("空行与正文具有相同时间戳时，正文行不应丢失", () => {
+    const text = `[00:10.00]\n[00:10.00]First line\n[00:20.00]Second`;
+    const { lines } = parseLRC(text);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0].words[0].word).toBe("First line");
+    expect(lines[0].startTime).toBe(10000);
+    expect(lines[0].endTime).toBe(20000);
+
+    expect(lines[1].words[0].word).toBe("Second");
+    expect(lines[1].startTime).toBe(20000);
+  });
+
+  it("正文与随后的同时间戳空行并存时，正文行不应丢失", () => {
+    const text = `[00:10.00]First line\n[00:10.00]\n[00:20.00]Second`;
+    const { lines } = parseLRC(text);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0].words[0].word).toBe("First line");
+    expect(lines[0].startTime).toBe(10000);
+    expect(lines[0].endTime).toBe(20000);
+
+    expect(lines[1].words[0].word).toBe("Second");
+  });
 });

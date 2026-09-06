@@ -1,12 +1,11 @@
 import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine } from "../utils/bg";
+import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
+import { pushCleanWord } from "../utils/word";
 
 /** 匹配行头属性码 [0]~[9] */
 const PROP_RE = /^\[(\d)\]/;
-
-/** 匹配元数据标签（如 [ti:xxx]、[ar:xxx]） */
-const META_TAG_RE = /^\[([a-zA-Z]+):(.*?)]$/;
 
 /** 匹配逐字时间戳：文字(起始ms,时长ms) */
 const WORD_RE = /(.*?)\((\d+),(\d+)\)/g;
@@ -42,7 +41,12 @@ const parseProperty = (code: number): { isBG: boolean | undefined; isDuet: boole
  * @returns 歌词解析结果
  */
 export const parseLyS = (text: string, options: ParseOptions = {}): LyricResult => {
-  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const {
+    detectBackground = false,
+    extractMetadata = false,
+    cleanKangxi = false,
+    applyOffset = false,
+  } = options;
   const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const metadata: LyricMetadata = extractMetadata ? { timingMode: "Word" } : {};
@@ -55,20 +59,7 @@ export const parseLyS = (text: string, options: ParseOptions = {}): LyricResult 
     const metaMatch = META_TAG_RE.exec(trimmed);
     if (metaMatch) {
       if (extractMetadata) {
-        const key = metaMatch[1].toLowerCase();
-        const val = metaMatch[2].trim();
-        if (val) {
-          if (key === "ti") metadata.title = [val];
-          else if (key === "ar") metadata.artist = [val];
-          else if (key === "al") metadata.album = [val];
-          else if (key === "by") metadata.authors = [val];
-          else if (key === "offset") {
-            const off = parseInt(val, 10);
-            if (!Number.isNaN(off)) metadata.offset = off;
-          } else {
-            (metadata.rawProperties ??= {})[key] = [val];
-          }
-        }
+        applyLrcMetaTag(metadata, metaMatch[1], metaMatch[2]);
       }
       continue;
     }
@@ -87,22 +78,7 @@ export const parseLyS = (text: string, options: ParseOptions = {}): LyricResult 
       const wordStart = parseInt(match[2], 10);
       const wordDur = parseInt(match[3], 10);
 
-      const startsWithSpace = /^\s/.test(rawWord);
-      const endsWithSpace = /\s$/.test(rawWord);
-      const cleanWord = rawWord.trim();
-
-      if (startsWithSpace && words.length > 0) {
-        words[words.length - 1].endsWithSpace = true;
-      }
-
-      if (cleanWord) {
-        words.push({
-          word: cleanWord,
-          startTime: wordStart,
-          endTime: wordStart + wordDur,
-          endsWithSpace: endsWithSpace || undefined,
-        });
-      }
+      pushCleanWord(words, rawWord, wordStart, wordStart + wordDur);
     }
 
     if (words.length > 0) {
@@ -127,6 +103,10 @@ export const parseLyS = (text: string, options: ParseOptions = {}): LyricResult 
       isBG,
       isDuet,
     });
+  }
+
+  if (applyOffset && metadata.offset) {
+    applyTimestampOffset(lines, metadata.offset);
   }
 
   return {

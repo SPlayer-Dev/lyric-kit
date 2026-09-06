@@ -1,10 +1,10 @@
 import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
-import { ANGLE_TIME_RE, BRACKET_TIME_RE, MAX_TIME, parseTime } from "../utils/timestamp";
-
-/** 匹配元数据标签（如 [ti:xxx]、[ar:xxx]、[offset:xxx]） */
-const META_TAG_RE = /^\[([a-zA-Z]+):(.*?)]$/;
+import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
+import { LAST_LINE_FALLBACK_MS } from "../utils/sync";
+import { ANGLE_TIME_RE, BRACKET_TIME_RE, parseTime } from "../utils/timestamp";
+import { pushCleanWord } from "../utils/word";
 
 /** 检测尖括号逐字标签 */
 const HAS_ANGLE_TAGS = /<\d+:\d+/;
@@ -45,25 +45,12 @@ const parseAngleWordTags = (content: string): LyricWord[] | null => {
       if (lastWord && startTime >= lastWord.startTime) lastWord.endTime = startTime;
       continue;
     }
-    const startsWithSpace = /^\s/.test(wordText);
-    const endsWithSpace = /\s$/.test(wordText);
-    const cleanWord = wordText.trim();
-    if (startsWithSpace && words.length > 0) {
-      words[words.length - 1].endsWithSpace = true;
-    }
-    if (cleanWord) {
-      words.push({
-        startTime,
-        endTime: 0,
-        word: cleanWord,
-        endsWithSpace: endsWithSpace || undefined,
-      });
-    }
+    pushCleanWord(words, wordText, startTime, 0);
   }
   if (words.length === 0) return null;
-  for (let i = 0; i < words.length - 1; i++) {
-    if (words[i].endTime <= words[i].startTime) {
-      words[i].endTime = words[i + 1].startTime;
+  for (let wordIndex = 0; wordIndex < words.length - 1; wordIndex++) {
+    if (words[wordIndex].endTime <= words[wordIndex].startTime) {
+      words[wordIndex].endTime = words[wordIndex + 1].startTime;
     }
   }
   return words;
@@ -91,20 +78,7 @@ const parseBracketWordTags = (
     tagCount++;
     const rawWord = lineContent.slice(prevTextStart, match.index);
     if (rawWord.trim().length > 0) {
-      const startsWithSpace = /^\s/.test(rawWord);
-      const endsWithSpace = /\s$/.test(rawWord);
-      const cleanWord = rawWord.trim();
-      if (startsWithSpace && words.length > 0) {
-        words[words.length - 1].endsWithSpace = true;
-      }
-      if (cleanWord) {
-        words.push({
-          startTime: prevTime,
-          endTime: time,
-          word: cleanWord,
-          endsWithSpace: endsWithSpace || undefined,
-        });
-      }
+      pushCleanWord(words, rawWord, prevTime, time);
     }
     prevTime = time;
     prevTextStart = BRACKET_TIME_RE.lastIndex;
@@ -114,19 +88,8 @@ const parseBracketWordTags = (
 
   if (prevTextStart < lineContent.length) {
     const rawWord = lineContent.slice(prevTextStart);
-    const startsWithSpace = /^\s/.test(rawWord);
-    const endsWithSpace = /\s$/.test(rawWord);
-    const cleanWord = rawWord.trim();
-    if (startsWithSpace && words.length > 0) {
-      words[words.length - 1].endsWithSpace = true;
-    }
-    if (cleanWord) {
-      words.push({
-        startTime: prevTime,
-        endTime: 0,
-        word: cleanWord,
-        endsWithSpace: endsWithSpace || undefined,
-      });
+    if (rawWord.trim().length > 0) {
+      pushCleanWord(words, rawWord, prevTime, 0);
     }
   }
 
@@ -145,12 +108,12 @@ const parseLrcPayload = (line: string, detectBackground: boolean): LyricLine[] =
   const content = line.slice(textStart);
   if (!content.trim()) {
     const lines: LyricLine[] = [];
-    for (const t of times) {
+    for (const time of times) {
       lines.push({
-        words: [],
+        words: [{ startTime: time, endTime: 0, word: "" }],
         translatedLyric: "",
         romanLyric: "",
-        startTime: t,
+        startTime: time,
         endTime: 0,
         isBG: false,
         isDuet: false,
@@ -162,8 +125,17 @@ const parseLrcPayload = (line: string, detectBackground: boolean): LyricLine[] =
   const angleWords = parseAngleWordTags(content);
   if (angleWords) {
     const lines: LyricLine[] = [];
-    for (const _ of times) {
-      const words = times.length > 1 ? angleWords.map((w) => ({ ...w })) : angleWords;
+    const baseTime = times[0];
+    for (const time of times) {
+      const delta = time - baseTime;
+      const words =
+        delta === 0
+          ? angleWords
+          : angleWords.map((word) => ({
+              ...word,
+              startTime: Math.max(0, word.startTime + delta),
+              endTime: Math.max(0, word.endTime + delta),
+            }));
       lines.push({
         words,
         translatedLyric: "",
@@ -180,27 +152,39 @@ const parseLrcPayload = (line: string, detectBackground: boolean): LyricLine[] =
   const bracketWords = parseBracketWordTags(content, times[0]);
   if (bracketWords) {
     const lines: LyricLine[] = [];
-    lines.push({
-      words: bracketWords,
-      translatedLyric: "",
-      romanLyric: "",
-      startTime: bracketWords[0].startTime,
-      endTime: bracketWords[bracketWords.length - 1].endTime,
-      isBG: detectBackgroundLine(bracketWords, detectBackground),
-      isDuet: false,
-    });
+    const baseTime = times[0];
+    for (const time of times) {
+      const delta = time - baseTime;
+      const words =
+        delta === 0
+          ? bracketWords
+          : bracketWords.map((word) => ({
+              ...word,
+              startTime: Math.max(0, word.startTime + delta),
+              endTime: Math.max(0, word.endTime + delta),
+            }));
+      lines.push({
+        words,
+        translatedLyric: "",
+        romanLyric: "",
+        startTime: words[0].startTime,
+        endTime: words[words.length - 1].endTime,
+        isBG: detectBackgroundLine(words, detectBackground),
+        isDuet: false,
+      });
+    }
     return lines;
   }
 
   const lineWords = [{ startTime: 0, endTime: 0, word: content.trim() }];
   const isBG = detectBackgroundLine(lineWords, detectBackground);
   const lines: LyricLine[] = [];
-  for (const t of times) {
+  for (const time of times) {
     lines.push({
-      words: [{ startTime: t, endTime: 0, word: lineWords[0].word }],
+      words: [{ startTime: time, endTime: 0, word: lineWords[0].word }],
       translatedLyric: "",
       romanLyric: "",
-      startTime: t,
+      startTime: time,
       endTime: 0,
       isBG,
       isDuet: false,
@@ -216,7 +200,13 @@ const parseLrcPayload = (line: string, detectBackground: boolean): LyricLine[] =
  * @returns 歌词解析结果
  */
 export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult => {
-  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const {
+    detectBackground = false,
+    extractMetadata = false,
+    cleanKangxi = false,
+    applyOffset = false,
+    keepEmptyLines = false,
+  } = options;
   const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const metadata: LyricMetadata = {};
@@ -228,23 +218,14 @@ export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult 
 
     const metaMatch = META_TAG_RE.exec(trimmed);
     if (metaMatch) {
-      const key = metaMatch[1].toLowerCase();
-      const val = metaMatch[2].trim();
+      const key = metaMatch[1];
+      const val = metaMatch[2];
 
-      if (extractMetadata && val) {
-        if (key === "ti") metadata.title = [val];
-        else if (key === "ar") metadata.artist = [val];
-        else if (key === "al") metadata.album = [val];
-        else if (key === "by") metadata.authors = [val];
-        else if (key === "offset") {
-          const off = parseInt(val, 10);
-          if (!Number.isNaN(off)) metadata.offset = off;
-        } else {
-          (metadata.rawProperties ??= {})[key] = [val];
-        }
+      if (extractMetadata) {
+        applyLrcMetaTag(metadata, key, val);
       }
 
-      if (key === "bg") {
+      if (key.toLowerCase() === "bg") {
         const bgPayload = parseLrcPayload(val, detectBackground);
         for (const item of bgPayload) {
           item.isBG = true;
@@ -266,38 +247,71 @@ export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult 
     }
   }
 
-  lines.sort((a, b) => a.startTime - b.startTime);
+  lines.sort((lineA, lineB) => lineA.startTime - lineB.startTime);
 
   const merged: LyricLine[] = [];
   for (const line of lines) {
+    const currentText = line.words
+      .map((word) => word.word)
+      .join("")
+      .trim();
+
+    // 若当前行是空行标记，若同时间戳已存在正文行则丢弃该冗余空行，否则暂存作为时间截止标记
+    if (!currentText) {
+      const hasExistingMain = merged.some(
+        (candidate) =>
+          candidate.startTime === line.startTime &&
+          candidate.isBG === line.isBG &&
+          candidate.words
+            .map((word) => word.word)
+            .join("")
+            .trim() !== "",
+      );
+      if (!hasExistingMain) {
+        merged.push(line);
+      }
+      continue;
+    }
+
     let target: LyricLine | undefined;
-    for (let i = merged.length - 1; i >= 0; i--) {
-      if (merged[i].startTime === line.startTime && merged[i].isBG === line.isBG) {
-        target = merged[i];
-        break;
+    for (let searchIndex = merged.length - 1; searchIndex >= 0; searchIndex--) {
+      const candidate = merged[searchIndex];
+      if (candidate.startTime === line.startTime && candidate.isBG === line.isBG) {
+        const candidateText = candidate.words
+          .map((word) => word.word)
+          .join("")
+          .trim();
+        if (candidateText) {
+          // 候选行是有实际文本的正文行，可作为翻译或音译的合并目标
+          target = candidate;
+          break;
+        } else {
+          // 候选行是同时间戳的纯空行标记，当前非空正文行取代其占位
+          merged.splice(searchIndex, 1);
+        }
       }
     }
+
     if (target) {
-      const lineText = line.words
-        .map((w) => w.word)
-        .join("")
-        .trim();
-      if (!lineText) continue;
       if (!target.translatedLyric) {
-        target.translatedLyric = lineText;
+        target.translatedLyric = currentText;
         continue;
       }
       if (!target.romanLyric) {
-        target.romanLyric = lineText;
+        target.romanLyric = currentText;
         continue;
       }
     }
     merged.push(line);
   }
 
-  let nextDistinctStartTime = MAX_TIME;
-  for (let i = merged.length - 1; i >= 0; i--) {
-    const line = merged[i];
+  const lastLine = merged[merged.length - 1];
+  let nextDistinctStartTime = lastLine
+    ? Math.max(lastLine.startTime + LAST_LINE_FALLBACK_MS, lastLine.endTime)
+    : 0;
+
+  for (let lineIndex = merged.length - 1; lineIndex >= 0; lineIndex--) {
+    const line = merged[lineIndex];
     if (line.endTime <= line.startTime) {
       line.endTime = nextDistinctStartTime;
     }
@@ -308,22 +322,31 @@ export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult 
     if (line.words.length === 1 && line.words[0].endTime <= line.words[0].startTime) {
       line.words[0].endTime = line.endTime;
     }
-    const prevLine = merged[i - 1];
+    const prevLine = merged[lineIndex - 1];
     if (!prevLine || prevLine.startTime < line.startTime) {
       nextDistinctStartTime = line.startTime;
     }
   }
 
-  const resultLines = merged.filter(
-    (line) =>
-      line.words
-        .map((w) => w.word)
-        .join("")
-        .trim() !== "",
-  );
+  // 过滤空行：在倒序计算 endTime 阶段，空行已作为时间截止标记界定了前一行的结束时间。
+  // 若未显式开启 keepEmptyLines（默认 false），输出最终歌词行时彻底剔除纯空白文本行，保持歌词列表干净；
+  // 若开启 keepEmptyLines（true），则完整保留该行（包含起止时间，起于间奏、止于下一行开头），交由播放器处理。
+  const resultLines = keepEmptyLines
+    ? merged
+    : merged.filter(
+        (line) =>
+          line.words
+            .map((word) => word.word)
+            .join("")
+            .trim() !== "",
+      );
+
+  if (applyOffset && metadata.offset) {
+    applyTimestampOffset(resultLines, metadata.offset);
+  }
 
   if (extractMetadata) {
-    const hasWordTiming = resultLines.some((l) => (l.words?.length ?? 0) > 1);
+    const hasWordTiming = resultLines.some((line) => (line.words?.length ?? 0) > 1);
     metadata.timingMode = hasWordTiming ? "Word" : "Line";
   }
 

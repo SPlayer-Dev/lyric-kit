@@ -43,22 +43,26 @@ const result = parseLyric({
 
 ### 序列化导出
 
-将 `LyricLine[]` 或 `LyricResult` 导出为标准歌词格式：
+支持使用独立序列化函数或统一入口 `serializeLyric`：
 
 ```ts
-import { serializeLyric } from "lyric-kit";
+import { toEnhancedLRC, toLRC, toSRT, toTTML } from "lyric-kit";
 
-// 默认导出为标准 LRC 格式
-const lrc = serializeLyric(lines, "lrc");
+// 导出为标准逐行 LRC 格式
+const lrc = toLRC(lines);
 
-// 逐字时间戳增强 LRC 格式
-const elrc = serializeLyric(lines, "elrc");
+// 逐字时间戳增强型 LRC 格式
+const elrc = toEnhancedLRC(lines);
 
-// Apple Music TTML XML 格式
-const ttml = serializeLyric(lines, "ttml");
+// Apple Music TTML XML 格式（支持传入 lines 或包含 metadata 的 result）
+const ttml = toTTML(result);
 
 // SubRip 字幕格式
-const srt = serializeLyric(lines, "srt");
+const srt = toSRT(lines);
+
+// 也可通过 serializeLyric 统一入口导出
+import { serializeLyric } from "lyric-kit";
+const output = serializeLyric(lines, "ttml");
 ```
 
 ### 清理元数据标头
@@ -120,12 +124,15 @@ if (lineIndex !== -1) {
 | `detectBackground` | `boolean` | `false` | 是否识别并分离括号内的和声与伴唱（标记为 `isBG`）。 |
 | `extractMetadata` | `boolean` | `false` | 是否提取歌曲元数据（歌曲名、歌手、专辑、制作人员、偏移量等）。 |
 | `cleanKangxi` | `boolean` | `false` | 是否将康熙部首及 CJK 兼容字符规范化为通用汉字。 |
+| `applyOffset` | `boolean` | `false` | 是否自动将 `metadata.offset` 毫秒数累加至所有行和词的时间戳中（`newTime = originalTime + offset`）。 |
+| `keepEmptyLines` | `boolean` | `false` | 是否保留纯空白文本行（间奏标记）。默认 `false` 过滤空行并截断前行；`true` 时完整保留供播放器处理间奏。 |
+| `multiLineMode` | `"join" \| "bilingual"` | `"join"` | SRT 多行解析模式。`join` 用空格连接多行；`bilingual` 首行为原文，第二行为译文，第三行为音译。 |
 | `preferredLang` | `string` | `""` | 多轨道 TTML 解析时优先匹配的翻译语言代码（如 `"zh-CN"`）。 |
 | `domParser` | `DOMParserLike` | 自动 | 自定义 DOMParser 实例或构造函数（Node.js 等无原生 DOM 环境下解析 TTML / QRC 必填）。 |
 
-### 独立格式解析器
+### 独立格式解析器与序列化器
 
-可直接导入并调用各格式的子解析器：
+可直接导入各格式的专属解析与导出函数（统一采用全大写规范命名）：
 
 ```ts
 import {
@@ -137,9 +144,18 @@ import {
   parseLyS,
   parseSRT,
   parseASS,
+  toLRC,
+  toEnhancedLRC,
+  toTTML,
+  toSRT,
 } from "lyric-kit";
 
+// 解析
 const result = parseLRC(lrcText, { cleanKangxi: true });
+
+// 序列化
+const ttmlXml = toTTML(result);
+const lrcText = toLRC(result.lines);
 ```
 
 ### `detectFormat(text)`

@@ -1,16 +1,15 @@
 import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
+import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
 import { parseTime } from "../utils/timestamp";
+import { pushCleanWord } from "../utils/word";
 
 /** 行头时间戳：[mm:ss.xxx] / [mm:ss:xxx] */
 const TIME_HEADER_RE = /^\[(\d+):(\d+)[.:](\d{1,3})\]/;
 
 /** 行头毫秒数：[起始ms, 时长ms] */
 const MS_HEADER_RE = /^\[(\d+),(\d+)\]/;
-
-/** 匹配元数据标签（如 [ti:xxx]、[ar:xxx]） */
-const META_TAG_RE = /^\[([a-zA-Z]+):(.*?)]$/;
 
 /** 行内逐字：<offset,dur>字 或 <offset,dur,0>字 */
 const WORD_RE = /<(\d+),(\d+)(?:,\d+)?>([^<]*)/g;
@@ -19,7 +18,7 @@ const WORD_RE = /<(\d+),(\d+)(?:,\d+)?>([^<]*)/g;
 const decodeBase64Utf8 = (str: string): string => {
   try {
     const raw = globalThis.atob(str);
-    const bytes = Uint8Array.from(raw, (c) => c.charCodeAt(0));
+    const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
     return new TextDecoder().decode(bytes);
   } catch {
     return "";
@@ -33,7 +32,12 @@ const decodeBase64Utf8 = (str: string): string => {
  * @returns 歌词解析结果
  */
 export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult => {
-  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const {
+    detectBackground = false,
+    extractMetadata = false,
+    cleanKangxi = false,
+    applyOffset = false,
+  } = options;
   const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const metadata: LyricMetadata = extractMetadata ? { timingMode: "Word" } : {};
@@ -62,13 +66,13 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
               }>;
             };
             if (Array.isArray(data.content)) {
-              for (const c of data.content) {
-                if (c.type === 1 && Array.isArray(c.lyricContent)) {
-                  krcTranslations = c.lyricContent.map((row) =>
+              for (const item of data.content) {
+                if (item.type === 1 && Array.isArray(item.lyricContent)) {
+                  krcTranslations = item.lyricContent.map((row) =>
                     Array.isArray(row) ? row.join("") : String(row),
                   );
-                } else if (c.type === 0 && Array.isArray(c.lyricContent)) {
-                  krcRomanizations = c.lyricContent.map((row) =>
+                } else if (item.type === 0 && Array.isArray(item.lyricContent)) {
+                  krcRomanizations = item.lyricContent.map((row) =>
                     Array.isArray(row) ? row.join("") : String(row),
                   );
                 }
@@ -80,17 +84,8 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
         } else if (extractMetadata) {
           metadata.language = val;
         }
-      } else if (extractMetadata && val) {
-        if (key === "ti") metadata.title = [val];
-        else if (key === "ar") metadata.artist = [val];
-        else if (key === "al") metadata.album = [val];
-        else if (key === "by") metadata.authors = [val];
-        else if (key === "offset") {
-          const off = parseInt(val, 10);
-          if (!Number.isNaN(off)) metadata.offset = off;
-        } else {
-          (metadata.rawProperties ??= {})[key] = [val];
-        }
+      } else if (extractMetadata) {
+        applyLrcMetaTag(metadata, metaMatch[1], metaMatch[2]);
       }
       continue;
     }
@@ -128,20 +123,7 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
       const start = lineStart + offset;
       const end = start + dur;
 
-      const startsWithSpace = /^\s/.test(rawWord);
-      const endsWithSpace = /\s$/.test(rawWord);
-      const cleanWord = rawWord.trim();
-      if (startsWithSpace && words.length > 0) {
-        words[words.length - 1].endsWithSpace = true;
-      }
-      if (cleanWord) {
-        words.push({
-          word: cleanWord,
-          startTime: start,
-          endTime: end,
-          endsWithSpace: endsWithSpace || undefined,
-        });
-      }
+      pushCleanWord(words, rawWord, start, end);
       lastEnd = Math.max(lastEnd, end);
     }
 
@@ -167,6 +149,10 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
       const bg = splitTrailingBackground(line, detectBackground);
       if (bg) lines.push(bg);
     }
+  }
+
+  if (applyOffset && metadata.offset) {
+    applyTimestampOffset(lines, metadata.offset);
   }
 
   return {

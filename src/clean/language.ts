@@ -32,9 +32,9 @@ export const applyLyricLanguages = (lines: LyricLine[]): void => {
   let kanaUntranslatedCount = 0;
   let hangulUntranslatedCount = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const content = lineContents[i];
-    const isTranslated = hasTranslation(lines[i]);
+  for (let index = 0; index < lines.length; index++) {
+    const content = lineContents[index];
+    const isTranslated = hasTranslation(lines[index]);
 
     if (KANA_RE.test(content)) {
       hasKana = true;
@@ -49,9 +49,9 @@ export const applyLyricLanguages = (lines: LyricLine[]): void => {
   const allKanaTranslated = hasKana && kanaUntranslatedCount === 0;
   const allHangulTranslated = hasHangul && hangulUntranslatedCount === 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const content = lineContents[i];
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const content = lineContents[index];
     const isTranslated = hasTranslation(line);
 
     if (KANA_RE.test(content)) {

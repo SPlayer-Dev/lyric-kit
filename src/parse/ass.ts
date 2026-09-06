@@ -118,9 +118,9 @@ export const parseASS = (text: string, options: ParseOptions = {}): LyricResult 
   }
 
   const groups = new Map<string, { orig?: DialogueLine; ts?: DialogueLine; roma?: DialogueLine }>();
-  for (const d of dialogues) {
-    const speaker = d.speaker;
-    const style = d.style;
+  for (const dialogue of dialogues) {
+    const speaker = dialogue.speaker;
+    const style = dialogue.style;
     const isTrans =
       style === "ts" ||
       style === "translate" ||
@@ -138,15 +138,15 @@ export const parseASS = (text: string, options: ParseOptions = {}): LyricResult 
 
     const track = speaker || (style.startsWith("v") ? style : "");
     const trackBase = track.replace(/-(trans|roman|roma)$/, "");
-    const key = `${d.startTime}-${d.endTime}-${trackBase}`;
+    const key = `${dialogue.startTime}-${dialogue.endTime}-${trackBase}`;
     const group = groups.get(key) ?? {};
 
     if (isTrans) {
-      group.ts = d;
+      group.ts = dialogue;
     } else if (isRoma) {
-      group.roma = d;
+      group.roma = dialogue;
     } else {
-      group.orig = d;
+      group.orig = dialogue;
     }
     groups.set(key, group);
   }
@@ -179,10 +179,10 @@ export const parseASS = (text: string, options: ParseOptions = {}): LyricResult 
     });
   }
 
-  lines.sort((a, b) => a.startTime - b.startTime);
+  lines.sort((lineA, lineB) => lineA.startTime - lineB.startTime);
 
   if (extractMetadata) {
-    const hasWordTiming = lines.some((l) => (l.words?.length ?? 0) > 1);
+    const hasWordTiming = lines.some((line) => (line.words?.length ?? 0) > 1);
     metadata.timingMode = hasWordTiming ? "Word" : "Line";
   }
 

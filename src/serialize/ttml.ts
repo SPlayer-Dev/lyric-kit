@@ -7,7 +7,12 @@ import { formatTtmlTime } from "../utils/timestamp";
  * @returns 转义后的 XML 安全字符串
  */
 const escapeXml = (text: string): string =>
-  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 
 /**
  * 将单个单词生成为带有时间与属性的 span 节点字符串
@@ -22,8 +27,8 @@ const singleWordSpan = (word: LyricWord): string => {
   if (word.ruby && word.ruby.length > 0) {
     const rubySpans = word.ruby
       .map(
-        (r) =>
-          `<span tts:ruby="text" begin="${formatTtmlTime(r.startTime)}" end="${formatTtmlTime(r.endTime)}">${escapeXml(r.word)}</span>`,
+        (rubyItem) =>
+          `<span tts:ruby="text" begin="${formatTtmlTime(rubyItem.startTime)}" end="${formatTtmlTime(rubyItem.endTime)}">${escapeXml(rubyItem.word)}</span>`,
       )
       .join("");
 
@@ -43,25 +48,39 @@ const wordSpans = (line: LyricLine): string => line.words.map(singleWordSpan).jo
 /**
  * 生成包含角色的辅助 span 节点（如翻译或音译）
  * @param role - 角色标识符（如 x-translation 或 x-roman）
- * @param text - 文本内容
- * @returns 角色 span XML 字符串
+ * @param text - 显示文本
+ * @returns span 节点 XML 字符串
  */
 const roleSpan = (role: string, text: string): string =>
-  text ? `<span ttm:role="${role}">${escapeXml(text)}</span>` : "";
+  `      <span ttm:role="${role}">${escapeXml(text)}</span>`;
 
 /**
- * 将背景人声歌词行序列化为嵌套 span 节点
- * @param bg - 背景歌词行对象
- * @returns 嵌套的背景音 XML 字符串
+ * 生成背景人声 span 节点
+ * @param bg - 背景人声歌词行对象
+ * @returns span 节点 XML 字符串
  */
-const bgSpan = (bg: LyricLine): string =>
-  `<span ttm:role="x-bg" begin="${formatTtmlTime(bg.startTime)}" end="${formatTtmlTime(bg.endTime)}">${wordSpans(bg)}${roleSpan("x-translation", bg.translatedLyric)}${roleSpan("x-roman", bg.romanLyric)}</span>`;
+const bgSpan = (bg: LyricLine): string => {
+  const agentAttr = bg.agentId ? ` ttm:agent="${escapeXml(bg.agentId)}"` : "";
+  const beginAttr = ` begin="${formatTtmlTime(bg.startTime)}"`;
+  const endAttr = ` end="${formatTtmlTime(bg.endTime)}"`;
+
+  const childSpans: string[] = [];
+  childSpans.push(`        ${wordSpans(bg)}`);
+  if (bg.translatedLyric) {
+    childSpans.push(roleSpan("x-translation", bg.translatedLyric));
+  }
+  if (bg.romanLyric) {
+    childSpans.push(roleSpan("x-roman", bg.romanLyric));
+  }
+
+  return `      <span ttm:role="x-bg"${agentAttr}${beginAttr}${endAttr}>\n${childSpans.join("\n")}\n      </span>`;
+};
 
 /**
- * 将主歌词行及其背景音序列化为 p 节点
+ * 将主歌词行及其关联背景音序列化为段落 XML
  * @param main - 主歌词行对象
- * @param bgs - 关联的背景歌词行列表
- * @returns 完整的 p 节点 XML 字符串
+ * @param bgs - 背景音歌词行列表
+ * @returns 段落 XML 字符串
  */
 const paragraph = (main: LyricLine, bgs: LyricLine[]): string => {
   const agent = main.isDuet
@@ -69,19 +88,23 @@ const paragraph = (main: LyricLine, bgs: LyricLine[]): string => {
     : main.agentId
       ? ` ttm:agent="${escapeXml(main.agentId)}"`
       : "";
-  const keyAttr = main.id ? ` itunes:key="${escapeXml(main.id)}"` : "";
-  const inner =
-    wordSpans(main) +
-    roleSpan("x-translation", main.translatedLyric) +
-    roleSpan("x-roman", main.romanLyric) +
-    bgs.map(bgSpan).join("");
-  return `<p begin="${formatTtmlTime(main.startTime)}" end="${formatTtmlTime(main.endTime)}"${keyAttr}${agent}>${inner}</p>`;
+  const key = main.id ? ` itunes:key="${escapeXml(main.id)}"` : "";
+  const begin = ` begin="${formatTtmlTime(main.startTime)}"`;
+  const end = ` end="${formatTtmlTime(main.endTime)}"`;
+
+  const linesXml: string[] = [];
+  linesXml.push(`      ${wordSpans(main)}`);
+  if (main.translatedLyric) linesXml.push(roleSpan("x-translation", main.translatedLyric));
+  if (main.romanLyric) linesXml.push(roleSpan("x-roman", main.romanLyric));
+  for (const bg of bgs) linesXml.push(bgSpan(bg));
+
+  return `    <p${key}${agent}${begin}${end}>\n${linesXml.join("\n")}\n    </p>`;
 };
 
 /**
- * 根据歌词元数据生成 head/metadata 节点字符串
+ * 构建 TTML 头部元数据 XML 片段
  * @param metadata - 歌词元数据对象
- * @returns head 节点 XML 字符串，若无有效元数据则返回空字符串
+ * @returns 头部 XML 字符串；无元数据时返回空字符串
  */
 const buildHeadXml = (metadata?: LyricMetadata): string => {
   if (!metadata) return "";
@@ -100,32 +123,32 @@ const buildHeadXml = (metadata?: LyricMetadata): string => {
   }
 
   if (metadata.songwriters && metadata.songwriters.length > 0) {
-    const sw = metadata.songwriters
-      .map((s) => `        <itunes:songwriter>${escapeXml(s)}</itunes:songwriter>`)
+    const songwriterNodes = metadata.songwriters
+      .map((writer) => `        <itunes:songwriter>${escapeXml(writer)}</itunes:songwriter>`)
       .join("\n");
-    metaLines.push(`      <itunes:songwriters>\n${sw}\n      </itunes:songwriters>`);
+    metaLines.push(`      <itunes:songwriters>\n${songwriterNodes}\n      </itunes:songwriters>`);
   }
 
   const addAmllMeta = (key: string, value: string): void => {
     metaLines.push(`      <amll:meta key="${escapeXml(key)}" value="${escapeXml(value)}" />`);
   };
 
-  for (const v of metadata.title ?? []) addAmllMeta("musicName", v);
-  for (const v of metadata.artist ?? []) addAmllMeta("artists", v);
-  for (const v of metadata.album ?? []) addAmllMeta("album", v);
-  for (const v of metadata.isrc ?? []) addAmllMeta("isrc", v);
-  for (const v of metadata.authorIds ?? []) addAmllMeta("ttmlAuthorGithub", v);
-  for (const v of metadata.authorNames ?? []) addAmllMeta("ttmlAuthorGithubLogin", v);
+  for (const val of metadata.title ?? []) addAmllMeta("musicName", val);
+  for (const val of metadata.artist ?? []) addAmllMeta("artists", val);
+  for (const val of metadata.album ?? []) addAmllMeta("album", val);
+  for (const val of metadata.isrc ?? []) addAmllMeta("isrc", val);
+  for (const val of metadata.authorIds ?? []) addAmllMeta("ttmlAuthorGithub", val);
+  for (const val of metadata.authorNames ?? []) addAmllMeta("ttmlAuthorGithubLogin", val);
 
   if (metadata.platformIds) {
     for (const [key, values] of Object.entries(metadata.platformIds)) {
-      for (const v of values ?? []) addAmllMeta(key, v);
+      for (const val of values ?? []) addAmllMeta(key, val);
     }
   }
 
   if (metadata.rawProperties) {
     for (const [key, values] of Object.entries(metadata.rawProperties)) {
-      for (const v of values ?? []) addAmllMeta(key, v);
+      for (const val of values ?? []) addAmllMeta(key, val);
     }
   }
 
@@ -138,7 +161,7 @@ const buildHeadXml = (metadata?: LyricMetadata): string => {
  * @param input - 歌词行数组或包含元数据的解析结果对象
  * @returns TTML XML 字符串
  */
-export const toTtml = (input: LyricLine[] | LyricResult): string => {
+export const toTTML = (input: LyricLine[] | LyricResult): string => {
   const lines = Array.isArray(input) ? input : input.lines;
   const metadata = Array.isArray(input) ? undefined : input.metadata;
 

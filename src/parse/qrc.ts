@@ -1,12 +1,11 @@
 import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
+import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
+import { pushCleanWord } from "../utils/word";
 
 /** 行头：[起始毫秒, 时长毫秒] */
 const LINE_HEADER_RE = /^\[(\d+),(\d+)\]/;
-
-/** 匹配元数据标签（如 [ti:xxx]、[ar:xxx]） */
-const META_TAG_RE = /^\[([a-zA-Z]+):(.*?)]$/;
 
 /** 逐词匹配正则：词内容(起始毫秒,时长毫秒) */
 const WORD_RE = /(.*?)\((\d+),(\d+)\)/g;
@@ -27,23 +26,7 @@ const parseWords = (rest: string): LyricWord[] => {
     const dur = parseInt(match[3], 10);
 
     if (!rawWord && dur === 0) continue;
-
-    const startsWithSpace = /^\s/.test(rawWord);
-    const endsWithSpace = /\s$/.test(rawWord);
-    const cleanWord = rawWord.trim();
-
-    if (startsWithSpace && words.length > 0) {
-      words[words.length - 1].endsWithSpace = true;
-    }
-
-    if (cleanWord) {
-      words.push({
-        word: cleanWord,
-        startTime: start,
-        endTime: start + dur,
-        endsWithSpace: endsWithSpace || undefined,
-      });
-    }
+    pushCleanWord(words, rawWord, start, start + dur);
   }
 
   if (words.length > 0) {
@@ -56,8 +39,14 @@ const parseWords = (rest: string): LyricWord[] => {
 /** XML 字符实体反转义 */
 const decodeXmlEntities = (str: string): string =>
   str
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_matched, code) => {
+      const codePoint = parseInt(code, 10);
+      return Number.isNaN(codePoint) ? "" : String.fromCodePoint(codePoint);
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_matched, code) => {
+      const codePoint = parseInt(code, 16);
+      return Number.isNaN(codePoint) ? "" : String.fromCodePoint(codePoint);
+    })
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
@@ -84,12 +73,12 @@ const extractFromXml = (text: string): { content: string; xmlMeta?: LyricMetadat
     if (albumMatch) xmlMeta.album = [decodeXmlEntities(albumMatch[1])];
   }
 
-  const greedyMatch = text.match(/LyricContent="([\s\S]*)"\s*\/?>/);
-  if (greedyMatch) return { content: decodeXmlEntities(greedyMatch[1]), xmlMeta };
   const cdataMatch = text.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
   if (cdataMatch) return { content: cdataMatch[1], xmlMeta };
   const attrMatch = text.match(/LyricContent="([^"]*)"/);
   if (attrMatch) return { content: decodeXmlEntities(attrMatch[1]), xmlMeta };
+  const multiLineMatch = text.match(/LyricContent="([\s\S]*?)"\s*\/?>/);
+  if (multiLineMatch) return { content: decodeXmlEntities(multiLineMatch[1]), xmlMeta };
   return { content: text, xmlMeta };
 };
 
@@ -100,7 +89,12 @@ const extractFromXml = (text: string): { content: string; xmlMeta?: LyricMetadat
  * @returns 歌词解析结果
  */
 export const parseQRC = (text: string, options: ParseOptions = {}): LyricResult => {
-  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const {
+    detectBackground = false,
+    extractMetadata = false,
+    cleanKangxi = false,
+    applyOffset = false,
+  } = options;
   const normalized = cleanKangxi ? normalizeKangxi(text) : text;
   const { content, xmlMeta } = extractFromXml(normalized);
   const metadata: LyricMetadata =
@@ -118,20 +112,7 @@ export const parseQRC = (text: string, options: ParseOptions = {}): LyricResult 
     const metaMatch = META_TAG_RE.exec(trimmed);
     if (metaMatch) {
       if (extractMetadata) {
-        const key = metaMatch[1].toLowerCase();
-        const val = metaMatch[2].trim();
-        if (val) {
-          if (key === "ti") metadata.title = [val];
-          else if (key === "ar") metadata.artist = [val];
-          else if (key === "al") metadata.album = [val];
-          else if (key === "by") metadata.authors = [val];
-          else if (key === "offset") {
-            const off = parseInt(val, 10);
-            if (!Number.isNaN(off)) metadata.offset = off;
-          } else {
-            (metadata.rawProperties ??= {})[key] = [val];
-          }
-        }
+        applyLrcMetaTag(metadata, metaMatch[1], metaMatch[2]);
       }
       continue;
     }
@@ -161,6 +142,10 @@ export const parseQRC = (text: string, options: ParseOptions = {}): LyricResult 
       const bg = splitTrailingBackground(line, detectBackground);
       if (bg) lines.push(bg);
     }
+  }
+
+  if (applyOffset && metadata.offset) {
+    applyTimestampOffset(lines, metadata.offset);
   }
 
   return {

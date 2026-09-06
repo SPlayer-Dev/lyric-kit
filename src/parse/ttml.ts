@@ -131,12 +131,12 @@ const pickLangIndex = (langs: (string | null)[], preferred: string): number => {
   const wantBase = want.split("-")[0];
   let baseMatch = -1;
   let hasTagged = false;
-  for (let i = 0; i < langs.length; i++) {
-    const lang = normalizeLang(langs[i]);
+  for (let index = 0; index < langs.length; index++) {
+    const lang = normalizeLang(langs[index]);
     if (!lang) continue;
     hasTagged = true;
-    if (lang === want) return i;
-    if (baseMatch === -1 && lang.split("-")[0] === wantBase) baseMatch = i;
+    if (lang === want) return index;
+    if (baseMatch === -1 && lang.split("-")[0] === wantBase) baseMatch = index;
   }
   if (baseMatch !== -1) return baseMatch;
   return hasTagged ? -1 : 0;
@@ -169,8 +169,8 @@ const getAttr = (
   const attrs = element.attributes;
   if (attrs) {
     const len = attrs.length;
-    for (let i = 0; i < len; i++) {
-      const attr = attrs[i];
+    for (let attrIndex = 0; attrIndex < len; attrIndex++) {
+      const attr = attrs[attrIndex];
       const attrLocalName = attr.localName || attr.name.split(":").pop();
       if (attrLocalName === localName) return attr.value;
     }
@@ -216,21 +216,21 @@ export const alignRomanization = (mainWords: LyricWord[], romanWords: LyricWord[
   const MIN_IOU_THRESHOLD = 0.1;
   const FAST_TRACK_TOLERANCE_MS = 2;
 
-  for (let i = 0; i < mainWords.length; i++) {
-    const main = mainWords[i];
+  for (let mainIndex = 0; mainIndex < mainWords.length; mainIndex++) {
+    const main = mainWords[mainIndex];
     const mainEndTime = main.endTime;
 
     let maxIou = 0;
     let bestMatchIndex = -1;
     let isFastTrackMatched = false;
 
-    let j = romanSearchStartIndex;
-    while (j < romanWords.length) {
-      const sub = romanWords[j];
+    let romanIndex = romanSearchStartIndex;
+    while (romanIndex < romanWords.length) {
+      const sub = romanWords[romanIndex];
 
       if (Math.abs(main.startTime - sub.startTime) <= FAST_TRACK_TOLERANCE_MS) {
         main.romanWord = sub.word;
-        romanSearchStartIndex = j + 1;
+        romanSearchStartIndex = romanIndex + 1;
         isFastTrackMatched = true;
         break;
       }
@@ -247,14 +247,14 @@ export const alignRomanization = (mainWords: LyricWord[], romanWords: LyricWord[
         const iou = intersection / unionDuration;
         if (iou > maxIou) {
           maxIou = iou;
-          bestMatchIndex = j;
+          bestMatchIndex = romanIndex;
         }
       }
 
       if (sub.startTime >= mainEndTime) {
         break;
       }
-      j++;
+      romanIndex++;
     }
 
     if (!isFastTrackMatched && bestMatchIndex !== -1 && maxIou >= MIN_IOU_THRESHOLD) {
@@ -315,8 +315,8 @@ const parseHead = (
     const all = root.getElementsByTagName("*");
     const lower = targetLocalName.toLowerCase();
     const len = all.length;
-    for (let i = 0; i < len; i++) {
-      const el = all[i];
+    for (let elemIndex = 0; elemIndex < len; elemIndex++) {
+      const el = all[elemIndex];
       const name = el.localName || el.tagName.split(":").pop();
       if (name?.toLowerCase() === lower) {
         res.push(el);
@@ -332,8 +332,8 @@ const parseHead = (
 
   // 标题元数据
   const titles = findElementsByLocalName(head, Elements.Title);
-  for (const t of titles) {
-    const text = t.textContent?.trim();
+  for (const titleEl of titles) {
+    const text = titleEl.textContent?.trim();
     if (text) metadata.title?.push(text);
   }
 
@@ -409,8 +409,8 @@ const parseHead = (
       if (processedSongwriterContainers.has(songwritersContainer)) continue;
       processedSongwriterContainers.add(songwritersContainer);
       const writers = findElementsByLocalName(songwritersContainer, Elements.Songwriter);
-      for (const w of writers) {
-        const name = w.textContent?.trim();
+      for (const writer of writers) {
+        const name = writer.textContent?.trim();
         if (name) metadata.songwriters?.push(name);
       }
     }
@@ -430,10 +430,10 @@ const parseHead = (
       processedSet: Set<Element>,
     ): void => {
       const containers = findElementsByLocalName(container, containerName);
-      for (const c of containers) {
-        if (processedSet.has(c)) continue;
-        processedSet.add(c);
-        const items = findElementsByLocalName(c, itemName);
+      for (const itemContainer of containers) {
+        if (processedSet.has(itemContainer)) continue;
+        processedSet.add(itemContainer);
+        const items = findElementsByLocalName(itemContainer, itemName);
         for (const item of items) {
           const lang = getAttr(item, NS.XML, Attributes.Lang, "xml:lang");
           const textNodes = findElementsByLocalName(item, Elements.Text);
@@ -456,16 +456,16 @@ const parseHead = (
                 const raw = childEl.textContent ?? "";
                 const normalized = normalizeText(raw, false);
                 const clean = normalized.trim();
-                const b = getAttr(childEl, NS.XML, Attributes.Begin);
-                const e = getAttr(childEl, NS.XML, Attributes.End);
+                const beginAttr = getAttr(childEl, NS.XML, Attributes.Begin);
+                const endAttr = getAttr(childEl, NS.XML, Attributes.End);
                 const endsWithSpace = TRAILING_SPACE_RE.test(normalized);
 
                 if (isBg) {
                   bgText += raw;
                   const innerSpans = childEl.getElementsByTagName("span");
                   if (innerSpans.length > 0) {
-                    for (let s = 0; s < innerSpans.length; s++) {
-                      const sp = innerSpans[s];
+                    for (let spanIndex = 0; spanIndex < innerSpans.length; spanIndex++) {
+                      const sp = innerSpans[spanIndex];
                       const spB = getAttr(sp, NS.XML, Attributes.Begin);
                       const spE = getAttr(sp, NS.XML, Attributes.End);
                       const spClean = stripParens(normalizeText(sp.textContent ?? ""));
@@ -477,21 +477,38 @@ const parseHead = (
                         });
                       }
                     }
-                  } else if (b && e && clean) {
+                  } else if (beginAttr && endAttr && clean) {
                     bgWords.push({
                       word: stripParens(clean),
-                      startTime: parseTTMLTime(b),
-                      endTime: parseTTMLTime(e),
+                      startTime: parseTTMLTime(beginAttr),
+                      endTime: parseTTMLTime(endAttr),
                       endsWithSpace: endsWithSpace || undefined,
                     });
                   }
                 } else {
                   mainText += raw;
-                  if (b && e && clean) {
+                  const innerSpans = childEl.getElementsByTagName("span");
+                  if (innerSpans.length > 0) {
+                    for (let spanIndex = 0; spanIndex < innerSpans.length; spanIndex++) {
+                      const sp = innerSpans[spanIndex];
+                      const spB = getAttr(sp, NS.XML, Attributes.Begin);
+                      const spE = getAttr(sp, NS.XML, Attributes.End);
+                      const spRaw = sp.textContent ?? "";
+                      const spClean = normalizeText(spRaw).trim();
+                      if (spB && spE && spClean) {
+                        mainWords.push({
+                          word: spClean,
+                          startTime: parseTTMLTime(spB),
+                          endTime: parseTTMLTime(spE),
+                          endsWithSpace: TRAILING_SPACE_RE.test(spRaw) || undefined,
+                        });
+                      }
+                    }
+                  } else if (beginAttr && endAttr && clean) {
                     mainWords.push({
                       word: clean,
-                      startTime: parseTTMLTime(b),
-                      endTime: parseTTMLTime(e),
+                      startTime: parseTTMLTime(beginAttr),
+                      endTime: parseTTMLTime(endAttr),
                       endsWithSpace: endsWithSpace || undefined,
                     });
                   }
@@ -703,8 +720,8 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
             let startTime = 0;
             let endTime = 0;
             if (rubyTags.length > 0) {
-              startTime = Math.min(...rubyTags.map((t) => t.startTime));
-              endTime = Math.max(...rubyTags.map((t) => t.endTime));
+              startTime = Math.min(...rubyTags.map((ruby) => ruby.startTime));
+              endTime = Math.max(...rubyTags.map((ruby) => ruby.endTime));
             }
 
             const cleanBaseText = baseText.trim();
@@ -736,8 +753,8 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
           let bgStart = bgBegin ? parseTTMLTime(bgBegin) : 0;
           let bgEndMs = bgEnd ? parseTTMLTime(bgEnd) : 0;
           if ((!bgStart || !bgEndMs) && bgState.words.length > 0) {
-            bgStart = Math.min(...bgState.words.map((w) => w.startTime));
-            bgEndMs = Math.max(...bgState.words.map((w) => w.endTime));
+            bgStart = Math.min(...bgState.words.map((word) => word.startTime));
+            bgEndMs = Math.max(...bgState.words.map((word) => word.endTime));
           }
 
           // 背景音自身无时间时继承父级时间
@@ -785,7 +802,7 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
             const sc = sidecar[parentKey];
             if (sc.bgTranslations?.length) {
               const idx = pickLangIndex(
-                sc.bgTranslations.map((t) => t.lang),
+                sc.bgTranslations.map((transItem) => transItem.lang),
                 preferredLang,
               );
               if (idx !== -1) trans = sc.bgTranslations[idx].text;
@@ -799,7 +816,7 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
           // 回退到背景行内翻译/音译
           if (!trans && bgState.translations.length > 0) {
             const idx = pickLangIndex(
-              bgState.translations.map((t) => t.lang),
+              bgState.translations.map((transItem) => transItem.lang),
               preferredLang,
             );
             if (idx !== -1) trans = bgState.translations[idx].text;
@@ -826,12 +843,12 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
           });
         } else if (role === Values.RoleTranslation) {
           const lang = getAttr(el, NS.XML, Attributes.Lang, "xml:lang");
-          const t = normalizeText(el.textContent);
-          if (t) state.translations.push({ lang, text: t });
+          const transText = normalizeText(el.textContent);
+          if (transText) state.translations.push({ lang, text: transText });
         } else if (role === Values.RoleRoman) {
           const lang = getAttr(el, NS.XML, Attributes.Lang, "xml:lang");
-          const r = normalizeText(el.textContent);
-          if (r) state.romanizations.push({ lang, text: r });
+          const romanText = normalizeText(el.textContent);
+          if (romanText) state.romanizations.push({ lang, text: romanText });
         } else {
           const wBegin = getAttr(el, NS.XML, Attributes.Begin);
           const wEnd = getAttr(el, NS.XML, Attributes.End);
@@ -890,7 +907,13 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
   let lastPersonIsDuet = false;
 
   /**
-   * 确定当前演唱者是否属于对唱侧
+   * 确定当前演唱者是否属于对唱侧（右对齐）
+   *
+   * 设计考量：
+   * - 针对双人声部交替场景（如男女对唱），通过跟踪最后切换的 person agent，在声部切换时翻转 isDuet 状态，
+   *   实现主声部与对唱声部分别左右布局渲染。
+   * - 若声部为 Group（合唱）则保持居中；若声明为 Other 则初始判定为对唱。
+   * - 此启发式规则在多 agent 频繁交替时效果最佳。
    * @param agentId - 演唱者标识符
    * @returns 是否属于对唱声部
    */
@@ -923,25 +946,26 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
 
   /**
    * 解析单个歌词行元素（<p>）并追加至结果列表
-   * @param p - 段落 DOM 元素
+   * @param paragraph - 段落 DOM 元素
    * @param songPart - 所属歌曲分段名称
    * @param blockIdx - 所属段落区块序号
    * @returns 无返回值
    */
-  const processLineElement = (p: Element, songPart?: string, blockIdx?: number): void => {
-    const begin = getAttr(p, NS.XML, Attributes.Begin);
-    const end = getAttr(p, NS.XML, Attributes.End);
-    const lineAgent = getAttr(p, NS.TTM, Elements.Agent, "ttm:agent");
-    const key = getAttr(p, NS.ITUNES, Attributes.Key, "itunes:key") || p.getAttribute("id");
+  const processLineElement = (paragraph: Element, songPart?: string, blockIdx?: number): void => {
+    const begin = getAttr(paragraph, NS.XML, Attributes.Begin);
+    const end = getAttr(paragraph, NS.XML, Attributes.End);
+    const lineAgent = getAttr(paragraph, NS.TTM, Elements.Agent, "ttm:agent");
+    const key =
+      getAttr(paragraph, NS.ITUNES, Attributes.Key, "itunes:key") || paragraph.getAttribute("id");
 
-    const state = parseCommonContent(p, key, false);
+    const state = parseCommonContent(paragraph, key, false);
 
     let startTime = begin ? parseTTMLTime(begin) : 0;
     let endTime = end ? parseTTMLTime(end) : 0;
 
     if ((!startTime || !endTime) && state.words.length > 0) {
-      startTime = Math.min(...state.words.map((w) => w.startTime));
-      endTime = Math.max(...state.words.map((w) => w.endTime));
+      startTime = Math.min(...state.words.map((word) => word.startTime));
+      endTime = Math.max(...state.words.map((word) => word.endTime));
     }
 
     // 逐行翻译与音译决策
@@ -954,7 +978,7 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
       const sc = sidecar[key];
       if (sc.translations?.length) {
         const idx = pickLangIndex(
-          sc.translations.map((t) => t.lang),
+          sc.translations.map((transItem) => transItem.lang),
           preferredLang,
         );
         if (idx !== -1) translatedLyric = sc.translations[idx].text;
@@ -968,7 +992,7 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
     // 回退到行内翻译与音译
     if (!translatedLyric && state.translations.length > 0) {
       const idx = pickLangIndex(
-        state.translations.map((t) => t.lang),
+        state.translations.map((transItem) => transItem.lang),
         preferredLang,
       );
       if (idx !== -1) translatedLyric = state.translations[idx].text;
@@ -1031,8 +1055,8 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
           undefined;
 
         const pNodes = Array.from(el.getElementsByTagName("p"));
-        for (const p of pNodes) {
-          processLineElement(p, songPart, currentBlockIndex);
+        for (const paragraphNode of pNodes) {
+          processLineElement(paragraphNode, songPart, currentBlockIndex);
         }
       } else if (tagName === Elements.P) {
         currentBlockIndex++;
@@ -1042,7 +1066,7 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
   }
 
   if (!metadata.timingMode) {
-    const hasWordTiming = resultLines.some((l) => (l.words?.length ?? 0) > 1);
+    const hasWordTiming = resultLines.some((line) => (line.words?.length ?? 0) > 1);
     metadata.timingMode = hasWordTiming ? "Word" : "Line";
   }
 

@@ -67,15 +67,15 @@ export const transformLyricText = async (
   // 深拷贝原始结构，避免突变原对象
   const resultLines: LyricLine[] = lines.map((line) => ({
     ...line,
-    words: line.words.map((w) => ({
-      ...w,
-      ruby: w.ruby ? w.ruby.map((r) => ({ ...r })) : undefined,
+    words: line.words.map((wordItem) => ({
+      ...wordItem,
+      ruby: wordItem.ruby ? wordItem.ruby.map((rubyItem) => ({ ...rubyItem })) : undefined,
     })),
   }));
 
-  for (let i = 0; i < convertedTexts.length; i++) {
-    const pos = textPositions[i];
-    const converted = convertedTexts[i];
+  for (let textIndex = 0; textIndex < convertedTexts.length; textIndex++) {
+    const pos = textPositions[textIndex];
+    const converted = convertedTexts[textIndex];
 
     if (pos.type === "translated") {
       resultLines[pos.lineIndex].translatedLyric = converted;

@@ -10,25 +10,25 @@ const TIME_RE = /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/;
  * @returns 对应毫秒数
  */
 const parseSrtTime = (value: string): number => {
-  const m = TIME_RE.exec(value);
-  if (!m) return 0;
-  const hr = parseInt(m[1], 10);
-  const min = parseInt(m[2], 10);
-  const sec = parseInt(m[3], 10);
-  let ms = parseInt(m[4], 10);
-  if (m[4].length === 1) ms *= 100;
-  else if (m[4].length === 2) ms *= 10;
+  const match = TIME_RE.exec(value);
+  if (!match) return 0;
+  const hr = parseInt(match[1], 10);
+  const min = parseInt(match[2], 10);
+  const sec = parseInt(match[3], 10);
+  let ms = parseInt(match[4], 10);
+  if (match[4].length === 1) ms *= 100;
+  else if (match[4].length === 2) ms *= 10;
   return ((hr * 60 + min) * 60 + sec) * 1000 + ms;
 };
 
 /**
  * 解析 SRT 字幕文本
  * @param text - SRT 文本内容
- * @param _options - 解析配置选项
+ * @param options - 解析配置选项
  * @returns 歌词解析结果
  */
 export const parseSRT = (text: string, options: ParseOptions = {}): LyricResult => {
-  const { cleanKangxi = false } = options;
+  const { cleanKangxi = false, multiLineMode = "join" } = options;
   const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const lines: LyricLine[] = [];
@@ -36,11 +36,16 @@ export const parseSRT = (text: string, options: ParseOptions = {}): LyricResult 
 
   for (const block of blocks) {
     const parts = block.trim().split("\n");
-    if (parts.length < 3) continue;
+    if (parts.length < 2) continue;
 
-    if (!/^\d+$/.test(parts[0].trim())) continue;
+    let timeLineIdx = 0;
+    if (/^\d+$/.test(parts[0].trim())) {
+      timeLineIdx = 1;
+    }
 
-    const timeLine = parts[1];
+    if (parts.length <= timeLineIdx) continue;
+
+    const timeLine = parts[timeLineIdx];
     const arrowIdx = timeLine.indexOf("-->");
     if (arrowIdx === -1) continue;
 
@@ -48,15 +53,22 @@ export const parseSRT = (text: string, options: ParseOptions = {}): LyricResult 
     const endTime = parseSrtTime(timeLine.slice(arrowIdx + 3));
 
     const textLines = parts
-      .slice(2)
-      .filter((l) => l.trim())
-      .map((l) => l.trim());
+      .slice(timeLineIdx + 1)
+      .filter((line) => line.trim())
+      .map((line) => line.trim());
     if (textLines.length === 0) continue;
 
-    const count = textLines.length;
-    const mainText = textLines[count - 1];
-    const translatedLyric = count >= 2 ? textLines[count - 2] : "";
-    const romanLyric = count >= 3 ? textLines[count - 3] : "";
+    let mainText = "";
+    let translatedLyric = "";
+    let romanLyric = "";
+
+    if (multiLineMode === "bilingual") {
+      mainText = textLines[0] ?? "";
+      translatedLyric = textLines[1] ?? "";
+      romanLyric = textLines[2] ?? "";
+    } else {
+      mainText = textLines.join(" ");
+    }
 
     lines.push({
       words: [{ startTime, endTime, word: mainText }],

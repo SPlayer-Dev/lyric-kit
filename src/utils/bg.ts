@@ -49,17 +49,17 @@ export const isFullyEnclosedByParens = (text: string): boolean => {
   let depth = 0;
   let firstCloseAtEnd = -1;
 
-  for (let i = 0; i < trimmed.length; i++) {
-    const char = trimmed[i];
+  for (let charIndex = 0; charIndex < trimmed.length; charIndex++) {
+    const char = trimmed[charIndex];
     if (char === "(" || char === "（") {
       depth++;
     } else if (char === ")" || char === "）") {
       depth--;
       if (depth < 0) return false;
       if (depth === 0) {
-        const remaining = trimmed.slice(i + 1);
+        const remaining = trimmed.slice(charIndex + 1);
         if (TRAILING_PUNCT_ONLY_RE.test(remaining)) {
-          firstCloseAtEnd = i;
+          firstCloseAtEnd = charIndex;
           break;
         }
         return false;
@@ -102,21 +102,21 @@ export const detectBackgroundLine = (words: LyricWord[], enabled = true): boolea
   const originalStartTime = words[0].startTime;
   const originalEndTime = words[words.length - 1].endTime;
 
-  for (let i = 0; i < words.length; i++) {
-    if (OPEN_PAREN_RE.test(words[i].word)) {
-      words[i].word = words[i].word.replace(OPEN_PAREN_RE, "");
+  for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
+    if (OPEN_PAREN_RE.test(words[wordIndex].word)) {
+      words[wordIndex].word = words[wordIndex].word.replace(OPEN_PAREN_RE, "");
       break;
     }
   }
 
-  for (let i = words.length - 1; i >= 0; i--) {
-    if (CLOSE_PAREN_RE.test(words[i].word)) {
-      words[i].word = words[i].word.replace(CLOSE_PAREN_RE, "");
+  for (let wordIndex = words.length - 1; wordIndex >= 0; wordIndex--) {
+    if (CLOSE_PAREN_RE.test(words[wordIndex].word)) {
+      words[wordIndex].word = words[wordIndex].word.replace(CLOSE_PAREN_RE, "");
       break;
     }
   }
 
-  const cleaned = words.filter((w) => w.word !== "");
+  const cleaned = words.filter((word) => word.word !== "");
   if (cleaned.length === 0) return false;
 
   cleaned[0].startTime = Math.min(cleaned[0].startTime, originalStartTime);
@@ -151,14 +151,14 @@ export const splitTrailingBackground = (line: LyricLine, enabled = true): LyricL
 
     let depth = 0;
     let openIdx = -1;
-    for (let i = closeIdx; i >= 0; i--) {
-      const char = trimmed[i];
+    for (let scanIndex = closeIdx; scanIndex >= 0; scanIndex--) {
+      const char = trimmed[scanIndex];
       if (char === ")" || char === "）") {
         depth++;
       } else if (char === "(" || char === "（") {
         depth--;
         if (depth === 0) {
-          openIdx = i;
+          openIdx = scanIndex;
           break;
         }
       }
@@ -227,16 +227,16 @@ export const splitTrailingBackground = (line: LyricLine, enabled = true): LyricL
   const originalBgStart = bgWords[0].startTime;
   const originalBgEnd = bgWords[bgWords.length - 1].endTime;
 
-  for (let i = 0; i < bgWords.length; i++) {
-    if (OPEN_PAREN_RE.test(bgWords[i].word)) {
-      bgWords[i].word = bgWords[i].word.replace(OPEN_PAREN_RE, "");
+  for (let wordIndex = 0; wordIndex < bgWords.length; wordIndex++) {
+    if (OPEN_PAREN_RE.test(bgWords[wordIndex].word)) {
+      bgWords[wordIndex].word = bgWords[wordIndex].word.replace(OPEN_PAREN_RE, "");
       break;
     }
   }
 
-  for (let i = bgWords.length - 1; i >= 0; i--) {
-    if (CLOSE_PAREN_RE.test(bgWords[i].word)) {
-      bgWords[i].word = bgWords[i].word.replace(CLOSE_PAREN_RE, "");
+  for (let wordIndex = bgWords.length - 1; wordIndex >= 0; wordIndex--) {
+    if (CLOSE_PAREN_RE.test(bgWords[wordIndex].word)) {
+      bgWords[wordIndex].word = bgWords[wordIndex].word.replace(CLOSE_PAREN_RE, "");
       break;
     }
   }
@@ -250,7 +250,7 @@ export const splitTrailingBackground = (line: LyricLine, enabled = true): LyricL
     originalBgEnd,
   );
 
-  const mainWords = words.slice(0, openIndex).filter((w) => w.word !== "");
+  const mainWords = words.slice(0, openIndex).filter((word) => word.word !== "");
   if (mainWords.length === 0) return null;
 
   line.words = mainWords;

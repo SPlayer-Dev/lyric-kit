@@ -10,15 +10,15 @@ export const extractLyricAuthors = (content: string, format: LyricFormat): strin
   if (format === "ttml") {
     // 优先提取 ttmlAuthorGithubLogin，作为可以直接用于跳转 GitHub 的账号
     const logins = [...content.matchAll(/key="ttmlAuthorGithubLogin"\s+value="([^"]*)"/g)]
-      .map((m) => m[1].trim())
+      .map((match) => match[1].trim())
       .filter(Boolean);
     if (logins.length > 0) {
       return Array.from(new Set(logins));
     }
     // 如果无 login 标识，从 ttmlAuthorGithub 主页链接中截取最后的用户名
     const bases = [...content.matchAll(/key="ttmlAuthorGithub"\s+value="([^"]*)"/g)]
-      .map((m) => {
-        const val = m[1].trim();
+      .map((match) => {
+        const val = match[1].trim();
         const parts = val.split("/");
         return parts[parts.length - 1] || val;
       })

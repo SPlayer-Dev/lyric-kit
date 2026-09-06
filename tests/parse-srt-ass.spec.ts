@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseASS, parseSRT } from "../src/parse";
 
 describe("parseSRT & parseASS", () => {
-  it("应解析标准 SRT 字幕", () => {
+  it("应解析标准 SRT 字幕（默认 join 多行）", () => {
     const srt = `1
 00:00:01,000 --> 00:00:03,000
-音译
-翻译
-原词文本
+第一行
+第二行
 
 2
 00:00:04,500 --> 00:00:06,000
@@ -18,15 +17,30 @@ describe("parseSRT & parseASS", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0].startTime).toBe(1000);
     expect(lines[0].endTime).toBe(3000);
-    expect(lines[0].words[0].word).toBe("原词文本");
-    expect(lines[0].translatedLyric).toBe("翻译");
-    expect(lines[0].romanLyric).toBe("音译");
+    expect(lines[0].words[0].word).toBe("第一行 第二行");
+    expect(lines[0].translatedLyric).toBe("");
 
     expect(lines[1].startTime).toBe(4500);
     expect(lines[1].endTime).toBe(6000);
     expect(lines[1].words[0].word).toBe("只有一行原词");
     expect(lines[1].translatedLyric).toBe("");
     expect(metadata).toEqual({});
+  });
+
+  it("应支持 bilingual 模式解析多行双语 SRT，且支持无序号首块", () => {
+    const srt = `00:00:01,000 --> 00:00:03,000
+原词文本
+翻译
+音译`;
+
+    const { lines } = parseSRT(srt, { multiLineMode: "bilingual" });
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].startTime).toBe(1000);
+    expect(lines[0].endTime).toBe(3000);
+    expect(lines[0].words[0].word).toBe("原词文本");
+    expect(lines[0].translatedLyric).toBe("翻译");
+    expect(lines[0].romanLyric).toBe("音译");
   });
 
   it("应解析 ASS 卡拉OK 逐字标签与多 Style 自动合并", () => {

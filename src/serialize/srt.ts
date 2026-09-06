@@ -17,7 +17,7 @@ const lineMainText = (line: LyricLine): string =>
  * @param lines - 歌词行数组
  * @returns SRT 格式字符串
  */
-export const toSrt = (lines: LyricLine[]): string => {
+export const toSRT = (lines: LyricLine[]): string => {
   const blocks: string[] = [];
   let index = 1;
 

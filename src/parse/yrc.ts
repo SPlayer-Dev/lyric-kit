@@ -1,12 +1,11 @@
 import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
+import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
+import { pushCleanWord } from "../utils/word";
 
 /** 行头：[起始毫秒, 时长毫秒] */
 const LINE_HEADER_RE = /^\[(\d+),(\d+)\]/;
-
-/** 匹配元数据标签（如 [ti:xxx]、[ar:xxx]） */
-const META_TAG_RE = /^\[([a-zA-Z]+):(.*?)]$/;
 
 /** 字级时间戳标记：(起始毫秒, 时长毫秒, 0) */
 const TIMING_TAG_RE = /\((\d+),(\d+),\d+\)/g;
@@ -19,42 +18,27 @@ const TIMING_TAG_RE = /\((\d+),(\d+),\d+\)/g;
 const parseYrcWords = (rest: string): LyricWord[] => {
   TIMING_TAG_RE.lastIndex = 0;
   const matches: { start: number; dur: number; index: number; length: number }[] = [];
-  let m: RegExpExecArray | null;
+  let match: RegExpExecArray | null;
 
-  while ((m = TIMING_TAG_RE.exec(rest)) !== null) {
+  while ((match = TIMING_TAG_RE.exec(rest)) !== null) {
     matches.push({
-      start: parseInt(m[1], 10),
-      dur: parseInt(m[2], 10),
-      index: m.index,
-      length: m[0].length,
+      start: parseInt(match[1], 10),
+      dur: parseInt(match[2], 10),
+      index: match.index,
+      length: match[0].length,
     });
   }
 
   if (matches.length === 0) return [];
 
   const words: LyricWord[] = [];
-  for (let i = 0; i < matches.length; i++) {
-    const curr = matches[i];
+  for (let matchIndex = 0; matchIndex < matches.length; matchIndex++) {
+    const curr = matches[matchIndex];
     const textStart = curr.index + curr.length;
-    const textEnd = i + 1 < matches.length ? matches[i + 1].index : rest.length;
+    const textEnd = matchIndex + 1 < matches.length ? matches[matchIndex + 1].index : rest.length;
     const rawWord = rest.slice(textStart, textEnd);
 
-    const startsWithSpace = /^\s/.test(rawWord);
-    const endsWithSpace = /\s$/.test(rawWord);
-    const cleanWord = rawWord.trim();
-
-    if (startsWithSpace && words.length > 0) {
-      words[words.length - 1].endsWithSpace = true;
-    }
-
-    if (cleanWord) {
-      words.push({
-        word: cleanWord,
-        startTime: curr.start,
-        endTime: curr.start + curr.dur,
-        endsWithSpace: endsWithSpace || undefined,
-      });
-    }
+    pushCleanWord(words, rawWord, curr.start, curr.start + curr.dur);
   }
 
   if (words.length > 0) {
@@ -71,7 +55,12 @@ const parseYrcWords = (rest: string): LyricWord[] => {
  * @returns 歌词解析结果
  */
 export const parseYRC = (text: string, options: ParseOptions = {}): LyricResult => {
-  const { detectBackground = false, extractMetadata = false, cleanKangxi = false } = options;
+  const {
+    detectBackground = false,
+    extractMetadata = false,
+    cleanKangxi = false,
+    applyOffset = false,
+  } = options;
   const content = cleanKangxi ? normalizeKangxi(text) : text;
 
   const metadata: LyricMetadata = extractMetadata ? { timingMode: "Word" } : {};
@@ -88,41 +77,42 @@ export const parseYRC = (text: string, options: ParseOptions = {}): LyricResult 
           const parsed = JSON.parse(jsonStr) as {
             c?: Array<{ tx?: string }>;
           };
-          if (Array.isArray(parsed.c)) {
-            for (let idx = 0; idx < parsed.c.length; idx++) {
-              const rawTx = parsed.c[idx]?.tx?.trim();
+          const contentList = parsed.c;
+          if (Array.isArray(contentList)) {
+            for (let idx = 0; idx < contentList.length; idx++) {
+              const rawTx = contentList[idx]?.tx?.trim();
               if (!rawTx) continue;
 
               const colonIdx = rawTx.indexOf(":");
               const fullColonIdx = colonIdx === -1 ? rawTx.indexOf("：") : colonIdx;
 
               let role = "";
-              let val = "";
+              let value = "";
 
               if (fullColonIdx > -1) {
                 role = rawTx.slice(0, fullColonIdx).trim();
-                val = rawTx.slice(fullColonIdx + 1).trim();
-                if (!val && idx + 1 < parsed.c.length) {
-                  val = (parsed.c[idx + 1]?.tx || "").trim();
+                value = rawTx.slice(fullColonIdx + 1).trim();
+                if (!value && idx + 1 < contentList.length) {
+                  value = (contentList[idx + 1]?.tx || "").trim();
                   idx++;
                 }
               }
 
-              if (role && val) {
+              if (role && value) {
                 if (/^(作词|作曲|编曲|词|曲|Lyricist|Composer|Arranger)/i.test(role)) {
-                  if (!metadata.songwriters?.includes(val)) {
-                    (metadata.songwriters ??= []).push(val);
+                  if (!metadata.songwriters?.includes(value)) {
+                    (metadata.songwriters ??= []).push(value);
                   }
                 } else if (/^(歌手|演唱|原唱|Artist|Vocals)/i.test(role)) {
-                  if (!metadata.artist?.includes(val)) {
-                    (metadata.artist ??= []).push(val);
+                  if (!metadata.artist?.includes(value)) {
+                    (metadata.artist ??= []).push(value);
                   }
                 } else if (/^(制作人|监制|出品|统筹|Producer|Publisher)/i.test(role)) {
-                  if (!metadata.authors?.includes(val)) {
-                    (metadata.authors ??= []).push(val);
+                  if (!metadata.authors?.includes(value)) {
+                    (metadata.authors ??= []).push(value);
                   }
                 } else {
-                  (metadata.rawProperties ??= {})[role] = [val];
+                  (metadata.rawProperties ??= {})[role] = [value];
                 }
               }
             }
@@ -137,20 +127,7 @@ export const parseYRC = (text: string, options: ParseOptions = {}): LyricResult 
     const metaMatch = META_TAG_RE.exec(trimmed);
     if (metaMatch) {
       if (extractMetadata) {
-        const key = metaMatch[1].toLowerCase();
-        const val = metaMatch[2].trim();
-        if (val) {
-          if (key === "ti") metadata.title = [val];
-          else if (key === "ar") metadata.artist = [val];
-          else if (key === "al") metadata.album = [val];
-          else if (key === "by") metadata.authors = [val];
-          else if (key === "offset") {
-            const off = parseInt(val, 10);
-            if (!Number.isNaN(off)) metadata.offset = off;
-          } else {
-            (metadata.rawProperties ??= {})[key] = [val];
-          }
-        }
+        applyLrcMetaTag(metadata, metaMatch[1], metaMatch[2]);
       }
       continue;
     }
@@ -179,6 +156,10 @@ export const parseYRC = (text: string, options: ParseOptions = {}): LyricResult 
       const bg = splitTrailingBackground(line, detectBackground);
       if (bg) lines.push(bg);
     }
+  }
+
+  if (applyOffset && metadata.offset) {
+    applyTimestampOffset(lines, metadata.offset);
   }
 
   return {

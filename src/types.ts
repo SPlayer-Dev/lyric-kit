@@ -1,9 +1,6 @@
 /** 歌词格式 */
 export type LyricFormat = "ttml" | "lys" | "yrc" | "qrc" | "krc" | "lrc" | "srt" | "ass";
 
-/** 歌词来源 */
-export type LyricSource = "external" | "embedded" | "online";
-
 /** 歌词行语言；und-Latn 表示语言未知的拉丁文字 */
 export type LyricLanguage = "ja" | "ko" | "zh-CN" | "und-Latn";
 
@@ -188,6 +185,31 @@ export interface ParseOptions {
    * @example "zh-CN"
    */
   preferredLang?: string;
+
+  /**
+   * 是否在解析时自动将 metadata.offset 毫秒数累加至所有行和词的时间戳中
+   * 采用数值直接累加约定：newTime = originalTime + offset。
+   * - offset > 0 时歌词时间戳增大（延后展示）；
+   * - offset < 0 时歌词时间戳减小（提前展示）。
+   * @default false
+   */
+  applyOffset?: boolean;
+
+  /**
+   * SRT 多行文本解析模式
+   * - join: 多行合并为单一主歌词（空格连接，避免生成未加时间戳的孤立行破坏 LRC/TTML 序列化）
+   * - bilingual: 第一行原文，第二行译文，第三行音译
+   * @default "join"
+   */
+  multiLineMode?: "join" | "bilingual";
+
+  /**
+   * 是否保留纯空白文本行（如 LRC 间奏标记）
+   * - 默认 false：自动剔除空行，同时利用其时间戳精准截断前一行的结束时间
+   * - 为 true 时：保留包含空文本词的歌词行，交由播放器或上层自行处理间奏逻辑
+   * @default false
+   */
+  keepEmptyLines?: boolean;
 
   /** 自定义注入的 XML DOMParser（在纯 Node.js 环境解析 TTML 或 QRC XML 时使用） */
   domParser?: DOMParserLike | DOMParserConstructor;

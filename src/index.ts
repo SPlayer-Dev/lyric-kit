@@ -34,10 +34,10 @@ export {
 // 序列化器
 export {
   serializeLyric,
-  toEnhancedLrc,
-  toLrc,
-  toSrt,
-  toTtml,
+  toEnhancedLRC,
+  toLRC,
+  toSRT,
+  toTTML,
 } from "./serialize";
 
 // 类型定义
@@ -50,7 +50,6 @@ export type {
   LyricLine,
   LyricMetadata,
   LyricResult,
-  LyricSource,
   LyricSpan,
   LyricWord,
   ParseOptions,

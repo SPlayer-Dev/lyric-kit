@@ -13,18 +13,36 @@ const lineMainText = (line: LyricLine): string =>
     .trim();
 
 /**
+ * 将背景人声文本包裹括号，防止回读与翻译冲突
+ * @param text - 原始文本
+ * @returns 括号包裹后的文本
+ */
+const formatBgText = (text: string): string => {
+  const trimmed = text.trim();
+  if (
+    (trimmed.startsWith("(") && trimmed.endsWith(")")) ||
+    (trimmed.startsWith("（") && trimmed.endsWith("）"))
+  ) {
+    return text;
+  }
+  return `(${text})`;
+};
+
+/**
  * 将歌词行序列化为标准逐行 LRC 格式
  * @param lines - 歌词行数组
  * @returns LRC 格式字符串
  */
-export const toLrc = (lines: LyricLine[]): string => {
+export const toLRC = (lines: LyricLine[]): string => {
   const out: string[] = [];
   for (const line of lines) {
-    const text = lineMainText(line);
+    let text = lineMainText(line);
     if (!text) continue;
+    if (line.isBG) text = formatBgText(text);
     const ts = `[${formatLrcTime(line.startTime)}]`;
     out.push(`${ts}${text}`);
     if (line.translatedLyric) out.push(`${ts}${line.translatedLyric}`);
+    if (line.romanLyric) out.push(`${ts}${line.romanLyric}`);
   }
   return out.join("\n");
 };
@@ -34,19 +52,21 @@ export const toLrc = (lines: LyricLine[]): string => {
  * @param lines - 歌词行数组
  * @returns 增强型 LRC 格式字符串
  */
-export const toEnhancedLrc = (lines: LyricLine[]): string => {
+export const toEnhancedLRC = (lines: LyricLine[]): string => {
   const out: string[] = [];
   for (const line of lines) {
     if (line.words.length === 0) continue;
     const lineTs = `[${formatLrcTime(line.startTime)}]`;
-    const body = line.words
+    let body = line.words
       .map(
         (word) => `<${formatLrcTime(word.startTime)}>${word.word}${word.endsWithSpace ? " " : ""}`,
       )
       .join("");
     if (!body.trim()) continue;
+    if (line.isBG) body = formatBgText(body);
     out.push(`${lineTs}${body}`);
     if (line.translatedLyric) out.push(`${lineTs}${line.translatedLyric}`);
+    if (line.romanLyric) out.push(`${lineTs}${line.romanLyric}`);
   }
   return out.join("\n");
 };

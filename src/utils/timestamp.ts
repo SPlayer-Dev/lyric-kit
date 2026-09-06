@@ -30,8 +30,8 @@ export const parseTime = (
   ms: string,
   padEndMs: boolean = true,
 ): number => {
-  const m = parseInt(min, 10);
-  const s = parseInt(sec, 10);
+  const minutes = parseInt(min, 10);
+  const seconds = parseInt(sec, 10);
   let millis = parseInt(ms, 10) || 0;
 
   if (padEndMs) {
@@ -39,7 +39,7 @@ export const parseTime = (
     else if (ms.length === 2) millis *= 10;
   }
 
-  return Math.min(m * 60_000 + s * 1000 + millis, MAX_TIME);
+  return Math.min(minutes * 60_000 + seconds * 1000 + millis, MAX_TIME);
 };
 
 /**
@@ -48,9 +48,9 @@ export const parseTime = (
  * @returns 毫秒数，解析失败返回 -1
  */
 export const parseBracketTag = (tag: string): number => {
-  const m = /^\[(\d+):(\d+)[.:](\d{1,3})\]$/.exec(tag);
-  if (!m) return -1;
-  return parseTime(m[1], m[2], m[3]);
+  const match = /^\[(\d+):(\d+)[.:](\d{1,3})\]$/.exec(tag);
+  if (!match) return -1;
+  return parseTime(match[1], match[2], match[3]);
 };
 
 /**
@@ -82,12 +82,22 @@ export const parseTTMLTime = (value: string): number => {
     if (Number.isNaN(min) || Number.isNaN(sec)) return 0;
     return Math.round((min * 60 + sec) * 1000);
   }
-  if (parts.length >= 3) {
+  if (parts.length === 3) {
     const hr = Number(parts[0]);
     const min = Number(parts[1]);
     const sec = Number(parts[2]);
     if (Number.isNaN(hr) || Number.isNaN(min) || Number.isNaN(sec)) return 0;
     return Math.round(((hr * 60 + min) * 60 + sec) * 1000);
+  }
+  if (parts.length >= 4) {
+    const hr = Number(parts[0]);
+    const min = Number(parts[1]);
+    const sec = Number(parts[2]);
+    const frames = Number(parts[3]);
+    if (Number.isNaN(hr) || Number.isNaN(min) || Number.isNaN(sec)) return 0;
+    // 兼容 TTML SMPTE 4 段式时间戳（HH:MM:SS:FF），未指定帧率时按 30fps 估算
+    const frameMs = Number.isNaN(frames) ? 0 : Math.round((frames / 30) * 1000);
+    return Math.round(((hr * 60 + min) * 60 + sec) * 1000) + frameMs;
   }
 
   return 0;

@@ -6,6 +6,7 @@ describe("detectFormat", () => {
   it("应根据歌词特征正确识别格式", () => {
     expect(detectFormat("[00:01.00]标准歌词")).toBe("lrc");
     expect(detectFormat("1\n00:00:01,000 --> 00:00:02,000\n字幕歌词")).toBe("srt");
+    expect(detectFormat("00:00:01,000 --> 00:00:02,000\n无序号字幕")).toBe("srt");
     expect(detectFormat('<tt xmlns="http://www.w3.org/ns/ttml"><body></body></tt>')).toBe("ttml");
     expect(detectFormat("[1000,500](1000,500,0)网易云逐字")).toBe("yrc");
     expect(detectFormat("[1000,500]QQ音乐逐字(1000,500)")).toBe("qrc");

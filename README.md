@@ -43,22 +43,26 @@ const result = parseLyric({
 
 ### Serialize Lyrics
 
-Export `LyricLine[]` or `LyricResult` into standard lyric formats:
+Export via dedicated serializer functions or the unified `serializeLyric` entry:
 
 ```ts
-import { serializeLyric } from "lyric-kit";
+import { toEnhancedLRC, toLRC, toSRT, toTTML } from "lyric-kit";
 
-// Default target is "lrc"
-const lrc = serializeLyric(lines, "lrc");
+// Standard line-by-line LRC
+const lrc = toLRC(lines);
 
 // Word-by-word enhanced LRC
-const elrc = serializeLyric(lines, "elrc");
+const elrc = toEnhancedLRC(lines);
 
-// Apple Music TTML XML
-const ttml = serializeLyric(lines, "ttml");
+// Apple Music TTML XML (accepts lines array or LyricResult with metadata)
+const ttml = toTTML(result);
 
 // SubRip subtitle
-const srt = serializeLyric(lines, "srt");
+const srt = toSRT(lines);
+
+// Or via unified serializeLyric entry:
+import { serializeLyric } from "lyric-kit";
+const output = serializeLyric(lines, "ttml");
 ```
 
 ### Clean Metadata Headers
@@ -120,12 +124,15 @@ Parses lyrics and returns a `LyricResult`.
 | `detectBackground` | `boolean` | `false` | Detect and split parenthesized background/harmony vocals. |
 | `extractMetadata` | `boolean` | `false` | Extract song metadata (title, artist, album, creators, offset). |
 | `cleanKangxi` | `boolean` | `false` | Normalize KangXi radicals and CJK compatibility ideographs to standard characters. |
+| `applyOffset` | `boolean` | `false` | Automatically apply `metadata.offset` ms to all lines and words (`newTime = originalTime + offset`). |
+| `keepEmptyLines` | `boolean` | `false` | Keep empty lines (interlude markers). Defaults to `false` (strips empty lines after clamping previous line); `true` preserves them for player interlude handling. |
+| `multiLineMode` | `"join" \| "bilingual"` | `"join"` | SRT multi-line parsing mode. `join` joins lines with space; `bilingual` maps lines to primary, translation, romanization. |
 | `preferredLang` | `string` | `""` | Preferred translation language code for multi-track TTML (e.g. `"zh-CN"`). |
 | `domParser` | `DOMParserLike` | auto | Custom DOMParser instance/constructor (required in non-browser/Node.js environments when parsing TTML or QRC XML). |
 
-### Format Parsers
+### Format Parsers & Serializers
 
-Individual format parsers can be called directly:
+Dedicated parsers and serializers for each format can be called directly (unified uppercase standard naming):
 
 ```ts
 import {
@@ -137,9 +144,18 @@ import {
   parseLyS,
   parseSRT,
   parseASS,
+  toLRC,
+  toEnhancedLRC,
+  toTTML,
+  toSRT,
 } from "lyric-kit";
 
+// Parsing
 const result = parseLRC(lrcText, { cleanKangxi: true });
+
+// Serialization
+const ttmlXml = toTTML(result);
+const lrcText = toLRC(result.lines);
 ```
 
 ### `detectFormat(text)`

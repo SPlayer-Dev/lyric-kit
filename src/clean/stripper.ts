@@ -64,7 +64,7 @@ const calculateScanLimit = (config: ScanLimitConfig, totalLines: number): number
 const getLineText = (line: LyricLine): string => {
   if (!line?.words) return "";
   return line.words
-    .map((w) => w.word)
+    .map((word) => word.word)
     .join("")
     .trim();
 };
@@ -115,10 +115,10 @@ const cleanTextForCheck = (text: string): string => {
 
 /**
  * 归一化关键词字符串（转小写并移除空格）
- * @param s - 原始字符串
+ * @param str - 原始字符串
  * @returns 归一化后的字符串
  */
-const normalizeKw = (s: string): string => s.toLowerCase().replace(/\s+/g, "");
+const normalizeKw = (str: string): string => str.toLowerCase().replace(/\s+/g, "");
 
 /**
  * 检查文本是否严格匹配元数据关键词或正则表达式
@@ -138,11 +138,12 @@ const isStrictMatch = (
   for (const kw of normalizedKeywords) {
     if (normalizedText.startsWith(kw)) {
       if (normalizedText.length === kw.length) return true;
-      if (STRICT_MATCH_SEPARATORS.has(normalizedText.charAt(kw.length))) return true;
+      const nextChar = normalizedText[kw.length];
+      if (STRICT_MATCH_SEPARATORS.has(nextChar)) return true;
     }
   }
-  for (const reg of regexes) {
-    if (reg.test(text)) return true;
+  for (const regex of regexes) {
+    if (regex.test(text)) return true;
   }
   return false;
 };
@@ -156,8 +157,8 @@ const isStrictMatch = (
 const looksLikeMetadata = (text: string, softRegexes: readonly RegExp[]): boolean => {
   const cleaned = cleanTextForCheck(text);
   if (cleaned.includes(":") || cleaned.includes("：") || cleaned.includes("-")) return true;
-  for (const reg of softRegexes) {
-    if (reg.test(text)) return true;
+  for (const regex of softRegexes) {
+    if (regex.test(text)) return true;
   }
   return false;
 };
@@ -181,14 +182,14 @@ const findHeaderCutoff = (
   limit: number,
 ): number => {
   let lastValidMetadataIndex = startIndex - 1;
-  for (let i = startIndex; i < limit; i++) {
-    if (i >= lines.length) break;
-    const text = getLineText(lines[i]);
+  for (let index = startIndex; index < limit; index++) {
+    if (index >= lines.length) break;
+    const text = getLineText(lines[index]);
     if (!text) continue;
     const strict = isStrictMatch(text, normalizedKeywords, regexes);
     const weak = looksLikeMetadata(text, softRegexes);
     if (!strict && !weak) break;
-    if (strict) lastValidMetadataIndex = i;
+    if (strict) lastValidMetadataIndex = index;
   }
   return lastValidMetadataIndex + 1;
 };
@@ -214,13 +215,13 @@ const findFooterCutoff = (
   if (startIndex >= lines.length) return startIndex;
   const scanEnd = Math.max(startIndex, lines.length - limit);
   let firstValidFooterIndex = lines.length;
-  for (let i = lines.length - 1; i >= scanEnd; i--) {
-    const text = getLineText(lines[i]);
+  for (let index = lines.length - 1; index >= scanEnd; index--) {
+    const text = getLineText(lines[index]);
     if (!text) continue;
     const strict = isStrictMatch(text, normalizedKeywords, regexes);
     const weak = looksLikeMetadata(text, softRegexes);
     if (!strict && !weak) break;
-    if (strict) firstValidFooterIndex = i;
+    if (strict) firstValidFooterIndex = index;
   }
   return firstValidFooterIndex;
 };
@@ -258,18 +259,18 @@ export const stripLyricMetadata = (
   const normalizedKeywords = rawKeywords.map(normalizeKw);
 
   const regexes: RegExp[] = [];
-  for (const p of rawRegexes) {
+  for (const pattern of rawRegexes) {
     try {
-      regexes.push(new RegExp(p, "i"));
+      regexes.push(new RegExp(pattern, "i"));
     } catch {
       // 忽略非法正则
     }
   }
 
   const softRegexes: RegExp[] = [];
-  for (const p of rawSoftRegexes) {
+  for (const pattern of rawSoftRegexes) {
     try {
-      softRegexes.push(new RegExp(p, "i"));
+      softRegexes.push(new RegExp(pattern, "i"));
     } catch {
       // 忽略非法正则
     }

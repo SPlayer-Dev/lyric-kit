@@ -31,7 +31,7 @@ const ALIGN_TOLERANCE_MS = 300;
 export const detectFormat = (text: string): LyricFormat => {
   const trimmed = text.trimStart();
   if (trimmed.startsWith("[Script Info]") || /^\[V4\+? Styles\]/m.test(text)) return "ass";
-  if (/^\d+\r?\n\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->/.test(trimmed)) return "srt";
+  if (/^(?:\d+\r?\n)?\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->/.test(trimmed)) return "srt";
   if (trimmed.startsWith("<?xml") || trimmed.startsWith("<")) {
     if (/LyricContent="|<QrcInfos|<Lyric_/.test(text)) return "qrc";
     if (trimmed.startsWith("<tt") || /<tt\s/i.test(text)) return "ttml";
@@ -82,7 +82,7 @@ const parseContent = (
  */
 const lineText = (line: LyricLine): string =>
   line.words
-    .map((w) => w.word)
+    .map((word) => word.word)
     .join("")
     .trim();
 
@@ -98,20 +98,20 @@ export const pairTranslation = (
   transLines: LyricLine[],
   field: "translatedLyric" | "romanLyric",
 ): void => {
-  const trans = [...transLines].sort((a, b) => a.startTime - b.startTime);
-  let i = 0;
-  let j = 0;
-  while (i < lines.length && j < trans.length) {
-    const diff = lines[i].startTime - trans[j].startTime;
+  const trans = [...transLines].sort((lineA, lineB) => lineA.startTime - lineB.startTime);
+  let mainIndex = 0;
+  let transIndex = 0;
+  while (mainIndex < lines.length && transIndex < trans.length) {
+    const diff = lines[mainIndex].startTime - trans[transIndex].startTime;
     if (Math.abs(diff) <= ALIGN_TOLERANCE_MS) {
-      const text = lineText(trans[j]);
-      if (isMeaningfulTranslation(text)) lines[i][field] = text;
-      i++;
-      j++;
+      const text = lineText(trans[transIndex]);
+      if (isMeaningfulTranslation(text)) lines[mainIndex][field] = text;
+      mainIndex++;
+      transIndex++;
     } else if (diff < 0) {
-      i++;
+      mainIndex++;
     } else {
-      j++;
+      transIndex++;
     }
   }
 };

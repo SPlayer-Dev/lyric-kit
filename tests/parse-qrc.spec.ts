@@ -69,4 +69,23 @@ describe("parseQRC", () => {
     expect(metadata.artist).toEqual(["周杰伦 & 朋友"]);
     expect(metadata.timingMode).toBe("Word");
   });
+
+  it("应正确使用 String.fromCodePoint 解码 >0xFFFF 的 Unicode 字符实体（Emoji）", () => {
+    const xml = `<QrcInfos Title="&#128512;&#x1F3A4;"><Lyric_1 LyricContent="[1000,1000]歌(1000,500)词(1500,500)"/></QrcInfos>`;
+    const { metadata } = parseQRC(xml, { extractMetadata: true });
+
+    expect(metadata.title).toEqual(["😀🎤"]);
+  });
+
+  it("当 XML 包含多个 Lyric 节点时，非贪婪提取应保证只取主歌词而不吞掉后续内容", () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<QrcInfos LyricCount="2">
+  <Lyric_1 LyricContent="[1000,1000]原(1000,500)文(1500,500)"/>
+  <Lyric_2 LyricContent="[1000,1000]翻(1000,500)译(1500,500)"/>
+</QrcInfos>`;
+    const { lines } = parseQRC(xml);
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].words.map((w) => w.word).join("")).toBe("原文");
+  });
 });

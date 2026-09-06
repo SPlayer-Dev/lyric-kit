@@ -1,6 +1,6 @@
 import type { LyricLine } from "../types";
 
-const LAST_LINE_FALLBACK_MS = 8000;
+export const LAST_LINE_FALLBACK_MS = 8000;
 
 /**
  * 根据播放时间查找当前歌词行索引
@@ -22,16 +22,16 @@ export const findLyricIndex = (lines: LyricLine[], time: number, prevIndex = -1)
   }
 
   // 二分查找：找最后一个 startTime <= time 的行
-  let lo = 0;
-  let hi = lines.length - 1;
+  let low = 0;
+  let high = lines.length - 1;
   let result = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    if (lines[mid].startTime <= time) {
-      result = mid;
-      lo = mid + 1;
+  while (low <= high) {
+    const midIndex = (low + high) >>> 1;
+    if (lines[midIndex].startTime <= time) {
+      result = midIndex;
+      low = midIndex + 1;
     } else {
-      hi = mid - 1;
+      high = midIndex - 1;
     }
   }
 
@@ -43,9 +43,11 @@ export const findLyricIndex = (lines: LyricLine[], time: number, prevIndex = -1)
   }
 
   // 跳过背景歌词行，往前找最近的主歌词行
-  while (result >= 0 && lines[result].isBG) result--;
+  for (let searchIndex = result; searchIndex >= 0; searchIndex--) {
+    if (!lines[searchIndex].isBG) return searchIndex;
+  }
 
-  return result;
+  return -1;
 };
 
 /**
@@ -56,9 +58,9 @@ export const findLyricIndex = (lines: LyricLine[], time: number, prevIndex = -1)
  */
 export const findActiveLyricIndices = (lines: LyricLine[], time: number): number[] => {
   const result: number[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (time >= line.startTime && time < line.endTime) result.push(i);
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    if (time >= line.startTime && time < line.endTime) result.push(lineIndex);
     else if (line.startTime > time) break;
   }
   return result;
@@ -72,70 +74,81 @@ export const findActiveLyricIndices = (lines: LyricLine[], time: number): number
  */
 export const pickLatestStartedIndex = (lines: LyricLine[], time: number): number => {
   if (lines.length === 0) return -1;
-  let lo = 0;
-  let hi = lines.length - 1;
+  let low = 0;
+  let high = lines.length - 1;
   let result = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    if (lines[mid].startTime <= time) {
-      result = mid;
-      lo = mid + 1;
+  while (low <= high) {
+    const midIndex = (low + high) >>> 1;
+    if (lines[midIndex].startTime <= time) {
+      result = midIndex;
+      low = midIndex + 1;
     } else {
-      hi = mid - 1;
+      high = midIndex - 1;
     }
   }
   return result;
 };
 
 /**
- * 提前切换至下一行歌词索引
+ * 选出适合滚动的行索引（行结束前不切走，结束后立即切下一行）
  * @param lines - 歌词行数组
  * @param time - 当前播放毫秒数
- * @returns 提前切换后的行索引
+ * @returns 匹配的行索引，无匹配返回 -1
  */
 export const pickAdvanceOnEndIndex = (lines: LyricLine[], time: number): number => {
-  const idx = pickLatestStartedIndex(lines, time);
-  if (idx >= 0 && idx + 1 < lines.length && lines[idx].endTime <= time) {
-    return idx + 1;
+  const activeIndex = pickLatestStartedIndex(lines, time);
+  if (activeIndex === -1) return -1;
+
+  const current = lines[activeIndex];
+  if (time >= current.endTime && activeIndex + 1 < lines.length) {
+    return activeIndex + 1;
   }
-  return idx;
+  return activeIndex;
 };
 
 /**
- * 选出当前作为主显示的行索引
+ * 主歌词行索引选择（考虑重叠行、行结束提前滚动、首行前序等待）
+ * 适合桌面歌词等单行展示场景
  * @param lines - 歌词行数组
  * @param time - 当前播放毫秒数
- * @returns 最优主行索引
+ * @returns 匹配的行索引，无匹配返回 -1
  */
 export const pickPrimaryIndex = (lines: LyricLine[], time: number): number => {
   if (lines.length === 0) return -1;
-  let lo = 0;
-  let hi = lines.length - 1;
-  let latest = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    if (lines[mid].startTime <= time) {
-      latest = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
+
+  // 处于首行之前：显示首行
+  if (time < lines[0].startTime) return 0;
+
+  const activeIndex = pickLatestStartedIndex(lines, time);
+  if (activeIndex === -1) return -1;
+
+  // 若当前命中行是背景人声，优先寻找同时间段的主歌词行
+  if (lines[activeIndex].isBG) {
+    for (let searchIndex = activeIndex - 1; searchIndex >= 0; searchIndex--) {
+      if (
+        !lines[searchIndex].isBG &&
+        time >= lines[searchIndex].startTime &&
+        time < lines[searchIndex].endTime
+      ) {
+        return searchIndex;
+      }
     }
   }
-  if (latest < 0) return -1;
-  const latestActive = time < lines[latest].endTime;
-  if (!latestActive) return latest;
-  if (latest > 0) {
-    const prev = lines[latest - 1];
-    if (prev.startTime <= time && time < prev.endTime) return latest - 1;
+
+  // 跨行空隙期：当前行唱完（time >= current.endTime）且存在下一行时，推进展示下一行
+  const current = lines[activeIndex];
+  if (time >= current.endTime && activeIndex + 1 < lines.length) {
+    return activeIndex + 1;
   }
-  return latest;
+
+  return activeIndex;
 };
 
 /**
- * 截断修正最后一行歌词的结束时间
- * @param lines - 歌词行数组
- * @param trackDurationMs - 可选的曲目总时长毫秒数
- * @returns 截断处理后的歌词行数组
+ * 校验并限制最后一行歌词的结束时间
+ * @param lines - 歌词行列表
+ * @param trackDurationMs - 音轨总时长毫秒数
+ * @returns 限制后的歌词行列表
  */
 export const clampLastLineEnd = (lines: LyricLine[], trackDurationMs?: number): LyricLine[] => {
   if (lines.length === 0) return lines;
@@ -148,8 +161,10 @@ export const clampLastLineEnd = (lines: LyricLine[], trackDurationMs?: number): 
   const clamped: LyricLine = {
     ...last,
     endTime: reasonable,
-    words: last.words.map((w, i, arr) =>
-      i === arr.length - 1 && w.endTime > reasonable ? { ...w, endTime: reasonable } : w,
+    words: last.words.map((word, wordIndex, wordArray) =>
+      wordIndex === wordArray.length - 1 && word.endTime > reasonable
+        ? { ...word, endTime: reasonable }
+        : word,
     ),
   };
   return [...lines.slice(0, -1), clamped];
