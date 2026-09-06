@@ -3,6 +3,24 @@
   "version": "0.1.0",
   "description": "A lightweight, zero-dependency toolkit for parsing, serializing, and processing lyrics across multiple formats (LRC, TTML, QRC, YRC, KRC, LyS, SRT, ASS).",
   "type": "module",
+  "packageManager": "pnpm@11.21.0",
+  "author": {
+    "name": "imsyy",
+    "email": "imsyy1024@gmail.com",
+    "url": "https://imsyy.top"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SPlayer-Dev/lyric-kit.git"
+  },
+  "homepage": "https://github.com/SPlayer-Dev/lyric-kit#readme",
+  "bugs": {
+    "url": "https://github.com/SPlayer-Dev/lyric-kit/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -19,7 +37,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.zh-CN.md"
   ],
   "scripts": {
     "build": "tsdown",
@@ -27,7 +46,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "prepublishOnly": "pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "keywords": [
     "lyric",
