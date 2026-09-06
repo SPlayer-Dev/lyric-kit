@@ -10,9 +10,11 @@ import type {
   TTMLAgent,
   TTMLPlatformId,
 } from "../types";
+import { alignRomanization } from "../utils/roman";
 import { parseTTMLTime } from "../utils/timestamp";
 
 export type { DOMParserConstructor, DOMParserLike };
+export { alignRomanization };
 
 const NS = {
   TT: "http://www.w3.org/ns/ttml",
@@ -204,65 +206,6 @@ interface SidecarEntry {
 }
 
 type SidecarMap = Record<string, SidecarEntry>;
-
-/**
- * 基于时间重叠交并比将逐字音译音节对齐到主歌词单词上
- * @param mainWords - 主歌词单词数组
- * @param romanWords - 逐字音译音节数组
- * @returns 无返回值（原地修改）
- */
-export const alignRomanization = (mainWords: LyricWord[], romanWords: LyricWord[]): void => {
-  let romanSearchStartIndex = 0;
-  const MIN_IOU_THRESHOLD = 0.1;
-  const FAST_TRACK_TOLERANCE_MS = 2;
-
-  for (let mainIndex = 0; mainIndex < mainWords.length; mainIndex++) {
-    const main = mainWords[mainIndex];
-    const mainEndTime = main.endTime;
-
-    let maxIou = 0;
-    let bestMatchIndex = -1;
-    let isFastTrackMatched = false;
-
-    let romanIndex = romanSearchStartIndex;
-    while (romanIndex < romanWords.length) {
-      const sub = romanWords[romanIndex];
-
-      if (Math.abs(main.startTime - sub.startTime) <= FAST_TRACK_TOLERANCE_MS) {
-        main.romanWord = sub.word;
-        romanSearchStartIndex = romanIndex + 1;
-        isFastTrackMatched = true;
-        break;
-      }
-
-      const overlapStart = Math.max(main.startTime, sub.startTime);
-      const overlapEnd = Math.min(mainEndTime, sub.endTime);
-      const intersection = Math.max(0, overlapEnd - overlapStart);
-
-      if (intersection > 0) {
-        const unionStart = Math.min(main.startTime, sub.startTime);
-        const unionEnd = Math.max(mainEndTime, sub.endTime);
-        const unionDuration = Math.max(1, unionEnd - unionStart);
-
-        const iou = intersection / unionDuration;
-        if (iou > maxIou) {
-          maxIou = iou;
-          bestMatchIndex = romanIndex;
-        }
-      }
-
-      if (sub.startTime >= mainEndTime) {
-        break;
-      }
-      romanIndex++;
-    }
-
-    if (!isFastTrackMatched && bestMatchIndex !== -1 && maxIou >= MIN_IOU_THRESHOLD) {
-      main.romanWord = romanWords[bestMatchIndex].word;
-      romanSearchStartIndex = bestMatchIndex + 1;
-    }
-  }
-};
 
 /**
  * 解析文档头部元数据与翻译/音译 Sidecar

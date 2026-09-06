@@ -18,6 +18,7 @@ export { stripLyricMetadata } from "./clean/stripper";
 
 // 解析器
 export {
+  alignRomanization,
   detectFormat,
   pairTranslation,
   parseASS,
@@ -61,6 +62,8 @@ export type {
 
 // 播放同步与行处理
 export { detectBackgroundLine, splitTrailingBackground } from "./utils/bg";
+export type { KanaUnit } from "./utils/kana";
+export { applyKanaToLines, parseKanaUnits } from "./utils/kana";
 export { getWordSweepProgress } from "./utils/sweep";
 export {
   clampLastLineEnd,
@@ -70,7 +73,6 @@ export {
   pickLatestStartedIndex,
   pickPrimaryIndex,
 } from "./utils/sync";
-
 // 时间与播放算法
 export {
   ANGLE_TIME_RE,

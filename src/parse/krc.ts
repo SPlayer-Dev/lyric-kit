@@ -1,6 +1,7 @@
 import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
+import { applyKanaToLines } from "../utils/kana";
 import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
 import { parseTime } from "../utils/timestamp";
 import { pushCleanWord } from "../utils/word";
@@ -45,6 +46,7 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
   let krcTranslations: string[] = [];
   let krcRomanizations: string[] = [];
   let lineIndex = 0;
+  let kanaTag = "";
 
   for (const raw of content.split("\n")) {
     const trimmed = raw.trim();
@@ -54,6 +56,9 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
     if (metaMatch) {
       const key = metaMatch[1].toLowerCase();
       const val = metaMatch[2].trim();
+      if (key === "kana") {
+        kanaTag = trimmed;
+      }
       if (key === "language") {
         const isBase64 = val.startsWith("ey") || val.startsWith("{");
         if (isBase64) {
@@ -149,6 +154,10 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
       const bg = splitTrailingBackground(line, detectBackground);
       if (bg) lines.push(bg);
     }
+  }
+
+  if (kanaTag) {
+    applyKanaToLines(lines, kanaTag);
   }
 
   if (applyOffset && metadata.offset) {

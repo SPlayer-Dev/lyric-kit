@@ -1,6 +1,7 @@
 import { normalizeKangxi } from "../clean/kangxi";
 import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } from "../types";
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
+import { applyKanaToLines } from "../utils/kana";
 import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
 import { pushCleanWord } from "../utils/word";
 
@@ -104,6 +105,7 @@ export const parseQRC = (text: string, options: ParseOptions = {}): LyricResult 
         ? { timingMode: "Word" }
         : {};
   const lines: LyricLine[] = [];
+  let kanaTag = "";
 
   for (const raw of content.split("\n")) {
     const trimmed = raw.trim();
@@ -111,6 +113,9 @@ export const parseQRC = (text: string, options: ParseOptions = {}): LyricResult 
 
     const metaMatch = META_TAG_RE.exec(trimmed);
     if (metaMatch) {
+      if (metaMatch[1].toLowerCase() === "kana") {
+        kanaTag = trimmed;
+      }
       if (extractMetadata) {
         applyLrcMetaTag(metadata, metaMatch[1], metaMatch[2]);
       }
@@ -142,6 +147,10 @@ export const parseQRC = (text: string, options: ParseOptions = {}): LyricResult 
       const bg = splitTrailingBackground(line, detectBackground);
       if (bg) lines.push(bg);
     }
+  }
+
+  if (kanaTag) {
+    applyKanaToLines(lines, kanaTag);
   }
 
   if (applyOffset && metadata.offset) {

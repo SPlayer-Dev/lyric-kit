@@ -112,8 +112,9 @@ if (lineIndex !== -1) {
   - `format?`: 手动指定主歌词格式。
   - `translation?`: 翻译文本。
   - `translationFormat?`: 手动指定翻译格式。
-  - `romaji?`: 罗马音文本。
+  - `romaji?`: 罗马音文本。若包含逐字时间戳（如 QRC / KRC / TTML），会自动将音节对齐挂载至各词的 `word.romanWord`。
   - `romajiFormat?`: 手动指定罗马音格式。
+  - `kana?`: 独立的振假名注音文本（可选，若主歌词未内嵌 `[kana: ...]` 标签时生效）。
 - **`options`**: `ParseOptions`（可选）
 
 #### `ParseOptions`
@@ -190,9 +191,9 @@ interface LyricWord {
   word: string;
   startTime: number; // 毫秒 (ms)
   endTime: number;   // 毫秒 (ms)
-  romanWord?: string;
+  romanWord?: string; // 逐字罗马音/拼音音译 (如 "kai", "zeoi")
+  ruby?: LyricSpan[]; // 振假名/注音跨度数组 (如日文假名 "かい")
   obscene?: boolean;
-  ruby?: LyricSpan[];
   endsWithSpace?: boolean;
   emptyBeat?: number;
 }

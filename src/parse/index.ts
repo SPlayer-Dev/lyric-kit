@@ -1,5 +1,14 @@
 import { isMeaningfulTranslation } from "../clean/meaningful";
-import type { LyricFormat, LyricInput, LyricLine, LyricResult, ParseOptions } from "../types";
+import type {
+  LyricFormat,
+  LyricInput,
+  LyricLine,
+  LyricResult,
+  LyricWord,
+  ParseOptions,
+} from "../types";
+import { applyKanaToLines } from "../utils/kana";
+import { alignRomanization } from "../utils/roman";
 import { parseASS } from "./ass";
 import { parseKRC } from "./krc";
 import { parseLRC } from "./lrc";
@@ -9,6 +18,7 @@ import { parseSRT } from "./srt";
 import { parseTTML } from "./ttml";
 import { parseYRC } from "./yrc";
 
+export { alignRomanization } from "../utils/roman";
 export { parseASS } from "./ass";
 export { parseKRC } from "./krc";
 export { parseLRC } from "./lrc";
@@ -87,6 +97,14 @@ const lineText = (line: LyricLine): string =>
     .trim();
 
 /**
+ * 判断单词数组是否包含逐字时间戳信息
+ * @param words - 歌词单词数组
+ * @returns 是否具备逐字时间信息
+ */
+const hasWordTiming = (words: LyricWord[]): boolean =>
+  words.length > 1 || (words.length === 1 && words[0].endTime > words[0].startTime);
+
+/**
  * 将翻译/音译歌词按时间戳对齐到主歌词行
  * @param lines - 主歌词行数组（原地修改）
  * @param transLines - 已解析的翻译/音译歌词行
@@ -106,6 +124,13 @@ export const pairTranslation = (
     if (Math.abs(diff) <= ALIGN_TOLERANCE_MS) {
       const text = lineText(trans[transIndex]);
       if (isMeaningfulTranslation(text)) lines[mainIndex][field] = text;
+      if (
+        field === "romanLyric" &&
+        hasWordTiming(lines[mainIndex].words) &&
+        hasWordTiming(trans[transIndex].words)
+      ) {
+        alignRomanization(lines[mainIndex].words, trans[transIndex].words);
+      }
       mainIndex++;
       transIndex++;
     } else if (diff < 0) {
@@ -142,6 +167,10 @@ export const parseLyric = (input: string | LyricInput, options: ParseOptions = {
   if (payload.romaji) {
     const romajiFormat = payload.romajiFormat ?? detectFormat(payload.romaji);
     pairTranslation(lines, parseContent(payload.romaji, romajiFormat, options).lines, "romanLyric");
+  }
+
+  if (payload.kana) {
+    applyKanaToLines(lines, payload.kana);
   }
 
   return {

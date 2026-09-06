@@ -112,8 +112,9 @@ Parses lyrics and returns a `LyricResult`.
   - `format?`: Optional format override.
   - `translation?`: Optional translation string.
   - `translationFormat?`: Optional translation format override.
-  - `romaji?`: Optional romanization string.
+  - `romaji?`: Optional romanization string. When word-timed (QRC / KRC / TTML), automatically aligns syllables to `word.romanWord`.
   - `romajiFormat?`: Optional romanization format override.
+  - `kana?`: Optional standalone furigana kana string (used if not embedded via `[kana: ...]`).
 - **`options`**: `ParseOptions` (optional)
 
 #### `ParseOptions`
@@ -190,9 +191,9 @@ interface LyricWord {
   word: string;
   startTime: number; // ms
   endTime: number;   // ms
-  romanWord?: string;
+  romanWord?: string; // Per-word romanization/pinyin syllable (e.g. "kai", "zeoi")
+  ruby?: LyricSpan[]; // Furigana/ruby spans (e.g. Japanese kana "かい")
   obscene?: boolean;
-  ruby?: LyricSpan[];
   endsWithSpace?: boolean;
   emptyBeat?: number;
 }

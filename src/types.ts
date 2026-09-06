@@ -86,6 +86,8 @@ export interface LyricInput {
   romaji?: string;
   /** 罗马音歌词格式（省略时自动探测） */
   romajiFormat?: LyricFormat;
+  /** 独立的假名注音原始文本 */
+  kana?: string;
 }
 
 /** 演唱者/声部信息 */
