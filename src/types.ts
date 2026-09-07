@@ -165,8 +165,9 @@ export interface ParseOptions {
   format?: LyricFormat;
 
   /**
-   * 是否通过括号启发式检测提取背景歌词行
-   * @default false
+   * 是否通过括号启发式检测提取背景歌词行并剥离括号（适用于 LRC/QRC/KRC/YRC 等非结构化格式）
+   * 注：TTML 等已具备原生结构化背景音标签的格式不受此选项影响，默认无条件规范化剥离括号
+   * @default true
    */
   detectBackground?: boolean;
 

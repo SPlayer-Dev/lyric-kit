@@ -34,7 +34,7 @@ const decodeBase64Utf8 = (str: string): string => {
  */
 export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult => {
   const {
-    detectBackground = false,
+    detectBackground = true,
     extractMetadata = false,
     cleanKangxi = false,
     applyOffset = false,

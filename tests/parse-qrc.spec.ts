@@ -30,17 +30,18 @@ describe("parseQRC", () => {
     expect(metadata.album).toEqual(["叶惠美"]);
   });
 
-  it("开启 detectBackground 时应识别背景音行", () => {
+  it("默认应识别背景音行并剥离括号", () => {
     const text = `[1000,2000]（和(1000,1000)声）(2000,1000)`;
-    const { lines } = parseQRC(text, { detectBackground: true });
+    const { lines } = parseQRC(text);
 
     expect(lines).toHaveLength(1);
     expect(lines[0].isBG).toBe(true);
+    expect(lines[0].words.map((w) => w.word).join("")).toBe("和声");
   });
 
-  it("默认 detectBackground: false 时不作为背景音处理", () => {
+  it("显式 detectBackground: false 时不作为背景音处理", () => {
     const text = `[1000,2000]（和(1000,1000)声）(2000,1000)`;
-    const { lines } = parseQRC(text);
+    const { lines } = parseQRC(text, { detectBackground: false });
 
     expect(lines).toHaveLength(1);
     expect(lines[0].isBG).toBe(false);

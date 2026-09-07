@@ -42,7 +42,7 @@ const parseProperty = (code: number): { isBG: boolean | undefined; isDuet: boole
  */
 export const parseLyS = (text: string, options: ParseOptions = {}): LyricResult => {
   const {
-    detectBackground = false,
+    detectBackground = true,
     extractMetadata = false,
     cleanKangxi = false,
     applyOffset = false,

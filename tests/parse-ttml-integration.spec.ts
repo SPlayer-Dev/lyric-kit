@@ -175,7 +175,6 @@ describe("AMLL TTML 对齐集成测试", () => {
   it("应完全解析 AMLL complex-test-song 的歌词行、分段与特性", () => {
     const { lines } = parseTTML(COMPLEX_XML, {
       preferredLang: "zh-Hans-CN",
-      detectBackground: true,
     });
 
     // 包含 L1, L2, L3 以及 L3 的背景音行
@@ -319,7 +318,7 @@ describe("AMLL TTML 对齐集成测试", () => {
         </div>
     </body>
 </tt>`;
-    const { lines } = parseTTML(duetXml, { detectBackground: true });
+    const { lines } = parseTTML(duetXml);
     expect(lines).toHaveLength(4);
 
     expect(lines[0].isDuet).toBe(false);
@@ -331,5 +330,23 @@ describe("AMLL TTML 对齐集成测试", () => {
     expect(lines[3].isBG).toBe(true);
     expect(lines[3].isDuet).toBe(true);
     expect(lines[3].words.map((w) => w.word).join("")).toBe("Bg 2");
+  });
+
+  it("应正确解析类似《薛之谦 - 洛城》的多字背景音且完全剥离首尾半角括号", () => {
+    const luochengXml = `<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+      <body><div><p begin="00:38.820" end="00:47.438">
+        <span begin="00:38.820" end="00:43.402">那支金箭穿过英雄的脚踵</span>
+        <span ttm:role="x-bg" begin="00:43.402" end="00:47.438">
+          <span begin="00:43.402" end="00:43.543">(你</span><span begin="00:43.543" end="00:43.672">惹</span><span begin="00:43.672" end="00:43.838">尘</span><span begin="00:43.838" end="00:44.350">埃</span> <span begin="00:44.350" end="00:44.558">八</span><span begin="00:44.558" end="00:44.726">千</span><span begin="00:44.725" end="00:45.047">里</span><span begin="00:45.047" end="00:45.389">外</span> <span begin="00:45.389" end="00:45.566">云</span><span begin="00:45.566" end="00:45.784">和</span><span begin="00:45.784" end="00:46.070">月</span><span begin="00:46.070" end="00:46.370">被</span><span begin="00:46.370" end="00:46.631">断</span><span begin="00:46.631" end="00:46.801">章</span><span begin="00:46.801" end="00:47.059">晕</span><span begin="00:47.059" end="00:47.438">红)</span>
+        </span>
+      </p></div></body></tt>`;
+    const { lines } = parseTTML(luochengXml);
+    expect(lines).toHaveLength(2);
+    expect(lines[0].isBG).toBe(false);
+    expect(lines[1].isBG).toBe(true);
+    expect(lines[1].words[0].word).toBe("你");
+    expect(lines[1].words[lines[1].words.length - 1].word).toBe("红");
+    const fullBgText = lines[1].words.map((word) => word.word).join("");
+    expect(fullBgText).toBe("你惹尘埃八千里外云和月被断章晕红");
   });
 });

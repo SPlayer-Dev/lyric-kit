@@ -34,10 +34,10 @@ describe("parseLyS", () => {
     const defaultResult = parseLyS(text);
     expect(defaultResult.lines[0].words[0].word).toBe("Hello");
     expect(defaultResult.lines[0].words[0].endsWithSpace).toBe(true);
-    expect(defaultResult.lines[1].isBG).toBe(false);
+    expect(defaultResult.lines[1].isBG).toBe(true);
 
-    const bgDetectedResult = parseLyS(text, { detectBackground: true });
-    expect(bgDetectedResult.lines[1].isBG).toBe(true);
+    const bgDisabledResult = parseLyS(text, { detectBackground: false });
+    expect(bgDisabledResult.lines[1].isBG).toBe(false);
   });
 
   it("应支持提取 LyS 头部元数据标签", () => {
