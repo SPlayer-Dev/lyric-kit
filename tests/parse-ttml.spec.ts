@@ -242,4 +242,32 @@ describe("parseTTML", () => {
     // 00:01:05:00 = 1分5秒 = 65000ms
     expect(lines[0].endTime).toBe(65000);
   });
+
+  it("应默认无条件剥离 TTML x-bg 背景音首尾括号", () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+  <body>
+    <div>
+      <p begin="00:01.000" end="00:05.000">
+        <span begin="00:01.000" end="00:02.000">主唱</span>
+        <span ttm:role="x-bg" begin="00:02.000" end="00:05.000">
+          <span begin="00:02.000" end="00:03.000">(伴</span>
+          <span begin="00:03.000" end="00:04.000">唱</span>
+          <span begin="00:04.000" end="00:05.000">音)</span>
+        </span>
+      </p>
+    </div>
+  </body>
+</tt>`;
+    const { lines } = parseTTML(xml);
+    expect(lines).toHaveLength(2);
+    expect(lines[0].isBG).toBe(false);
+    expect(lines[0].words.map((word) => word.word).join("")).toBe("主唱");
+
+    expect(lines[1].isBG).toBe(true);
+    // 首尾括号应被完全剥除，变为干净的 "伴" "唱" "音"
+    expect(lines[1].words.map((word) => word.word).join("")).toBe("伴唱音");
+    expect(lines[1].words[0].word).toBe("伴");
+    expect(lines[1].words[2].word).toBe("音");
+  });
 });

@@ -91,7 +91,7 @@ const extractFromXml = (text: string): { content: string; xmlMeta?: LyricMetadat
  */
 export const parseQRC = (text: string, options: ParseOptions = {}): LyricResult => {
   const {
-    detectBackground = false,
+    detectBackground = true,
     extractMetadata = false,
     cleanKangxi = false,
     applyOffset = false,

@@ -56,7 +56,7 @@ const parseYrcWords = (rest: string): LyricWord[] => {
  */
 export const parseYRC = (text: string, options: ParseOptions = {}): LyricResult => {
   const {
-    detectBackground = false,
+    detectBackground = true,
     extractMetadata = false,
     cleanKangxi = false,
     applyOffset = false,

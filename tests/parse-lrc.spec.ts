@@ -83,9 +83,9 @@ describe("parseLRC", () => {
     expect(lines[1].romanLyric).toBe("gubbai");
   });
 
-  it("开启 detectBackground 时应拆分行内尾随和声为独立背景音行", () => {
+  it("默认应启用 detectBackground 并拆分行内尾随和声为独立背景音行", () => {
     const text = `[00:01.00]<00:01.00>主歌词<00:01.50>(<00:01.50>和声部分<00:02.00>)`;
-    const { lines } = parseLRC(text, { detectBackground: true });
+    const { lines } = parseLRC(text);
 
     expect(lines).toHaveLength(2);
     expect(lines[0].isBG).toBe(false);
@@ -94,9 +94,9 @@ describe("parseLRC", () => {
     expect(lines[1].words.map((w) => w.word).join("")).toBe("和声部分");
   });
 
-  it("默认 detectBackground: false 时不拆分尾随括号内容", () => {
+  it("显式 detectBackground: false 时不拆分尾随括号内容", () => {
     const text = `[00:01.00]<00:01.00>主歌词<00:01.50>(<00:01.50>和声部分<00:02.00>)`;
-    const { lines } = parseLRC(text);
+    const { lines } = parseLRC(text, { detectBackground: false });
 
     expect(lines).toHaveLength(1);
     expect(lines[0].isBG).toBe(false);

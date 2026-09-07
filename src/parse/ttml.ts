@@ -210,12 +210,10 @@ type SidecarMap = Record<string, SidecarEntry>;
 /**
  * 解析文档头部元数据与翻译/音译 Sidecar
  * @param doc - XML 文档对象
- * @param detectBackground - 是否剥除背景音括号，默认为 false
  * @returns 包含元数据和 Sidecar 映射的对象
  */
 const parseHead = (
   doc: Document,
-  detectBackground = false,
 ): {
   metadata: LyricMetadata;
   sidecar: SidecarMap;
@@ -461,7 +459,7 @@ const parseHead = (
 
             mainText = normalizeText(mainText);
             const normalizedBg = normalizeText(bgText);
-            bgText = detectBackground ? stripParens(normalizedBg) : normalizedBg;
+            bgText = stripParens(normalizedBg);
             if (!mainText && !bgText) continue;
 
             if (!sidecar[forId]) sidecar[forId] = {};
@@ -547,12 +545,7 @@ const resolveDomParser = (options?: ParseOptions): DOMParserLike => {
  * @returns 歌词解析结果
  */
 export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult => {
-  const {
-    detectBackground = false,
-    extractMetadata = false,
-    preferredLang = "",
-    cleanKangxi = false,
-  } = options;
+  const { extractMetadata = false, preferredLang = "", cleanKangxi = false } = options;
   const content = cleanKangxi ? normalizeKangxi(text) : text;
   const parser = resolveDomParser(options);
   const doc = parser.parseFromString(content, "application/xml");
@@ -561,7 +554,7 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
     throw new Error("Invalid TTML XML");
   }
 
-  const { metadata, sidecar } = parseHead(doc, detectBackground);
+  const { metadata, sidecar } = parseHead(doc);
 
   const root = doc.documentElement;
   if (root) {
@@ -710,25 +703,21 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
             if (pEnd) bgEndMs = parseTTMLTime(pEnd);
           }
 
-          // 仅在显式开启 detectBackground 时剥除背景音首尾括号
-          if (detectBackground) {
-            if (bgState.words.length > 0) {
-              const first = bgState.words[0];
-              first.word = first.word.replace(/^[(（]+/, "").trimStart();
-              if (!first.word) bgState.words.shift();
+          // 背景歌词去掉首尾括号（与原项目保持一致，无条件剥离）
+          if (bgState.words.length > 0) {
+            const first = bgState.words[0];
+            first.word = first.word.replace(/^[(（]+/, "").trimStart();
+            if (!first.word) bgState.words.shift();
 
-              if (bgState.words.length > 0) {
-                const last = bgState.words[bgState.words.length - 1];
-                last.word = last.word.replace(/[)）]+$/, "").trimEnd();
-                if (!last.word) bgState.words.pop();
-              }
+            if (bgState.words.length > 0) {
+              const last = bgState.words[bgState.words.length - 1];
+              last.word = last.word.replace(/[)）]+$/, "").trimEnd();
+              if (!last.word) bgState.words.pop();
             }
           }
 
           // 若背景音无逐字 span，回退为单词行
-          const cleanBgText = detectBackground
-            ? stripParens(bgState.fullText)
-            : bgState.fullText.trim();
+          const cleanBgText = stripParens(bgState.fullText);
           if (bgState.words.length === 0 && cleanBgText) {
             bgState.words.push({
               word: cleanBgText,

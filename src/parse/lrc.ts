@@ -201,7 +201,7 @@ const parseLrcPayload = (line: string, detectBackground: boolean): LyricLine[] =
  */
 export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult => {
   const {
-    detectBackground = false,
+    detectBackground = true,
     extractMetadata = false,
     cleanKangxi = false,
     applyOffset = false,

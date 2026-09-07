@@ -166,7 +166,7 @@ export interface ParseOptions {
 
   /**
    * 是否通过括号启发式检测提取背景歌词行
-   * @default false
+   * @default true
    */
   detectBackground?: boolean;
 
