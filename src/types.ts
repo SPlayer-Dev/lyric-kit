@@ -220,14 +220,24 @@ export interface ParseOptions {
 /** 元数据行清理配置选项 */
 export interface StripOptions {
   /**
+   * 是否启用内置默认排除规则（defaultKeywords / defaultRegexes）
+   * @default true
+   * - true：内置规则与用户传入的 keywords / regexPatterns 合并去重后生效
+   * - false：仅使用用户传入的 keywords / regexPatterns（可完全自定义）
+   */
+  useDefaultRules?: boolean;
+
+  /**
    * 自定义关键词列表
-   * 若省略则使用库内置的 defaultKeywords 规则
+   * 传入后与内置 defaultKeywords 合并去重（useDefaultRules 为 false 时仅使用本列表）
+   * @default []
    */
   keywords?: string[];
 
   /**
    * 自定义正则字符串列表
-   * 若省略则使用库内置的 defaultRegexes 规则
+   * 传入后与内置 defaultRegexes 合并去重（useDefaultRules 为 false 时仅使用本列表）
+   * @default []
    */
   regexPatterns?: string[];
 

@@ -34,14 +34,14 @@ interface ScanLimitConfig {
 
 const DEFAULT_HEADER_LIMIT: ScanLimitConfig = {
   ratio: 0.2,
-  minLines: 20,
-  maxLines: 70,
+  minLines: 40,
+  maxLines: 140,
 };
 
 const DEFAULT_FOOTER_LIMIT: ScanLimitConfig = {
   ratio: 0.2,
-  minLines: 20,
-  maxLines: 50,
+  minLines: 40,
+  maxLines: 100,
 };
 
 /**
@@ -118,7 +118,8 @@ const cleanTextForCheck = (text: string): string => {
  * @param str - 原始字符串
  * @returns 归一化后的字符串
  */
-const normalizeKw = (str: string): string => str.toLowerCase().replace(/\s+/g, "");
+const normalizeKw = (str: string): string =>
+  str.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
 
 /**
  * 检查文本是否严格匹配元数据关键词或正则表达式
@@ -229,7 +230,7 @@ const findFooterCutoff = (
 /**
  * 剥离歌词中的元数据行（词/曲/编曲/制作/版权等）
  * @param lines - 原始歌词行列表
- * @param options - 清理选项（未指定则使用默认关键词与正则）
+ * @param options - 清理选项（默认使用内置关键词与正则，并与用户传入合并去重）
  * @returns 剥离元数据后的歌词行列表
  */
 export const stripLyricMetadata = (
@@ -252,8 +253,14 @@ export const stripLyricMetadata = (
     }
   }
 
-  const rawKeywords = options.keywords ?? defaultKeywords;
-  const rawRegexes = options.regexPatterns ?? defaultRegexes;
+  const useDefaultRules = options.useDefaultRules ?? true;
+
+  const rawKeywords = [
+    ...new Set([...(useDefaultRules ? defaultKeywords : []), ...(options.keywords ?? [])]),
+  ];
+  const rawRegexes = [
+    ...new Set([...(useDefaultRules ? defaultRegexes : []), ...(options.regexPatterns ?? [])]),
+  ];
   const rawSoftRegexes = options.softMatchRegexes ?? [];
 
   const normalizedKeywords = rawKeywords.map(normalizeKw);
