@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>lyric-kit demo</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- 左侧：歌词输入 + 分类参数 -->
+      <aside id="panel">
+        <!-- 歌词输入：轨道小 Tab + 格式选择 -->
+        <section class="input-section">
+          <nav id="track-tabs">
+            <button type="button" data-track="main" class="active">主歌词</button>
+            <button type="button" data-track="translation">翻译</button>
+            <button type="button" data-track="romaji">音译</button>
+            <button type="button" data-track="kana">注音</button>
+          </nav>
+
+          <div class="track-actions">
+            <button id="track-file-btn" class="btn-small" type="button">打开文件</button>
+            <span id="track-file-name" class="file-name">未选择文件</span>
+          </div>
+          <input
+            id="track-file"
+            type="file"
+            accept=".lrc,.ttml,.xml,.qrc,.krc,.yrc,.lys,.srt,.ass,.txt"
+            class="file-input-hidden"
+          />
+
+          <div class="track-panel" data-track-panel="main">
+            <textarea
+              id="main-input"
+              rows="9"
+              placeholder="粘贴或输入歌词文本，支持 LRC / TTML / QRC / YRC / KRC / LyS / SRT / ASS"
+            ></textarea>
+          </div>
+          <div class="track-panel" data-track-panel="translation" hidden>
+            <textarea id="translation-input" rows="9" placeholder="翻译歌词文本，将按时间戳对齐到主歌词（pairTranslation）"></textarea>
+          </div>
+          <div class="track-panel" data-track-panel="romaji" hidden>
+            <textarea id="romaji-input" rows="9" placeholder="音译歌词（罗马音 / 拼音），逐字格式可与主歌词逐词对齐（alignRomanization）"></textarea>
+          </div>
+          <div class="track-panel" data-track-panel="kana" hidden>
+            <textarea id="kana-input" rows="9" placeholder="[kana:...] 振假名标签内容，用于 applyKanaToLines / parseKanaUnits"></textarea>
+          </div>
+
+          <div class="track-format">
+            <span class="format-label" id="track-format-label">主歌词格式</span>
+            <select id="track-format" data-key="track.mainFormat">
+              <option value="auto">自动探测</option>
+              <option value="ttml">TTML</option>
+              <option value="lys">LyS</option>
+              <option value="yrc">YRC</option>
+              <option value="qrc">QRC</option>
+              <option value="krc">KRC</option>
+              <option value="lrc">LRC</option>
+              <option value="srt">SRT</option>
+              <option value="ass">ASS</option>
+            </select>
+          </div>
+        </section>
+
+        <nav id="tabs">
+          <button type="button" data-tab="parse" class="active">解析</button>
+          <button type="button" data-tab="clean">清洗</button>
+        </nav>
+
+        <!-- Tab 1：解析 -->
+        <section class="tab-panel" data-panel="parse">
+          <div class="ctl"><span class="ctl-label">背景人声检测<em>detectBackground</em></span><input type="checkbox" class="ctl-toggle" data-key="parse.detectBackground" checked /></div>
+          <div class="ctl"><span class="ctl-label">提取元数据<em>extractMetadata</em></span><input type="checkbox" class="ctl-toggle" data-key="parse.extractMetadata" /></div>
+          <div class="ctl"><span class="ctl-label">康熙部首还原<em>cleanKangxi</em></span><input type="checkbox" class="ctl-toggle" data-key="parse.cleanKangxi" /></div>
+          <div class="ctl"><span class="ctl-label">应用时间偏移<em>applyOffset</em></span><input type="checkbox" class="ctl-toggle" data-key="parse.applyOffset" /></div>
+          <div class="ctl"><span class="ctl-label">偏好语言<em>preferredLang</em></span><input type="text" class="ctl-text" data-key="parse.preferredLang" placeholder="如 zh-CN，留空不指定" /></div>
+          <div class="ctl">
+            <span class="ctl-label">SRT 多行模式<em>multiLineMode</em></span>
+            <select class="ctl-select" data-key="parse.multiLineMode">
+              <option value="join">合并为一行</option>
+              <option value="bilingual">原文 / 译文 / 音译</option>
+            </select>
+          </div>
+          <div class="ctl"><span class="ctl-label">保留间奏空行<em>keepEmptyLines</em></span><input type="checkbox" class="ctl-toggle" data-key="parse.keepEmptyLines" /></div>
+          <div class="ctl"><span class="ctl-label">单解析器模式<em>singleParser</em></span><input type="checkbox" class="ctl-toggle" data-key="parse.singleParser" /></div>
+          <p class="hint">单解析器模式：主歌词按轨道格式直接调用独立解析函数（如 parseTTML），跳过统一入口与清洗流水线，用于单独测试某个格式的解析。</p>
+          <h3 class="group-title">序列化输出</h3>
+          <div class="ctl">
+            <span class="ctl-label">目标格式<em>serializeLyric</em></span>
+            <select class="ctl-select" data-key="parse.serializeTarget">
+              <option value="lrc">LRC 逐行</option>
+              <option value="elrc">LRC 增强（逐字）</option>
+              <option value="ttml">TTML</option>
+              <option value="srt">SRT 字幕</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- Tab 2：清洗 -->
+        <section class="tab-panel" data-panel="clean" hidden>
+          <p class="hint">清洗是解析后的独立步骤：stripLyricMetadata 剥离首尾元数据行，normalizeLyricLines 规范化空格与时间戳，applyLyricLanguages 推断行语言。选项即刻作用于右侧结果。</p>
+          <div class="ctl"><span class="ctl-label">剥离元数据行<em>stripLyricMetadata</em></span><input type="checkbox" class="ctl-toggle" data-key="clean.stripMetadata" /></div>
+          <div class="ctl"><span class="ctl-label">使用内置规则<em>useDefaultRules</em></span><input type="checkbox" class="ctl-toggle" data-key="clean.useDefaultRules" checked /></div>
+          <div class="ctl ctl-area"><span class="ctl-label">附加关键词<em>keywords</em></span><textarea class="ctl-area-input" data-key="clean.keywords" rows="3" placeholder="每行一个或逗号分隔，与内置规则合并"></textarea></div>
+          <div class="ctl ctl-area"><span class="ctl-label">附加正则<em>regexPatterns</em></span><textarea class="ctl-area-input" data-key="clean.regexPatterns" rows="3" placeholder="每行一个或逗号分隔，与内置规则合并"></textarea></div>
+          <div class="ctl"><span class="ctl-label">歌曲名<em>matchTitle</em></span><input type="text" class="ctl-text" data-key="clean.matchTitle" placeholder="用于首行「歌名 - 歌手」识别" /></div>
+          <div class="ctl"><span class="ctl-label">歌手<em>matchArtists</em></span><input type="text" class="ctl-text" data-key="clean.matchArtists" placeholder="逗号分隔" /></div>
+          <div class="ctl"><span class="ctl-label">行归一化<em>normalizeLyricLines</em></span><input type="checkbox" class="ctl-toggle" data-key="clean.normalizeLines" checked /></div>
+          <div class="ctl"><span class="ctl-label">推断行语言<em>applyLyricLanguages</em></span><input type="checkbox" class="ctl-toggle" data-key="clean.applyLanguages" /></div>
+          <p class="hint">normalizeKangxi（康熙部首还原）通过解析选项 cleanKangxi 控制，见「解析」页。翻译/音译轨道的对齐（pairTranslation / alignRomanization）由 parseLyric 在传入轨道内容时自动执行。</p>
+        </section>
+      </aside>
+
+      <!-- 右侧：结果展示 -->
+      <main id="view">
+        <header id="stats-bar">
+          <div class="stat-item"><span class="stat-label">格式</span><span class="stat-val" id="stat-format">--</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat-item"><span class="stat-label">行数</span><span class="stat-val" id="stat-lines">0</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat-item"><span class="stat-label">背景行</span><span class="stat-val" id="stat-bg">0</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat-item"><span class="stat-label">对唱行</span><span class="stat-val" id="stat-duet">0</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat-item"><span class="stat-label">总时长</span><span class="stat-val" id="stat-duration">--</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat-item"><span class="stat-label">制作者</span><span class="stat-val" id="stat-authors">--</span></div>
+        </header>
+
+        <div id="result">
+          <div class="empty-placeholder">在左侧输入或导入歌词后，这里展示解析结果</div>
+        </div>
+
+        <section id="output-section">
+          <div class="output-header">
+            <span id="output-title">序列化输出</span>
+            <button id="btn-copy" class="btn-small" type="button">复制</button>
+          </div>
+          <pre id="output-pre"></pre>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
