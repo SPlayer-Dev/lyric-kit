@@ -45,7 +45,7 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
   const lines: LyricLine[] = [];
   let krcTranslations: string[] = [];
   let krcRomanizations: string[] = [];
-  let lineIndex = 0;
+  const mainLines: LyricLine[] = [];
   let kanaTag = "";
 
   for (const raw of content.split("\n")) {
@@ -141,18 +141,25 @@ export const parseKRC = (text: string, options: ParseOptions = {}): LyricResult 
     const calculatedEnd = lineDur > 0 ? lineStart + lineDur : lastEnd;
     const line: LyricLine = {
       words,
-      translatedLyric: krcTranslations[lineIndex] ?? "",
-      romanLyric: krcRomanizations[lineIndex] ?? "",
+      translatedLyric: "",
+      romanLyric: "",
       startTime: lineStart,
       endTime: calculatedEnd,
       isBG: detectBackgroundLine(words, detectBackground),
       isDuet: false,
     };
-    lineIndex++;
+    mainLines.push(line);
     lines.push(line);
     if (!line.isBG) {
       const bg = splitTrailingBackground(line, detectBackground);
       if (bg) lines.push(bg);
+    }
+  }
+
+  if (krcTranslations.length > 0 || krcRomanizations.length > 0) {
+    for (let idx = 0; idx < mainLines.length; idx++) {
+      if (krcTranslations[idx]) mainLines[idx].translatedLyric = krcTranslations[idx];
+      if (krcRomanizations[idx]) mainLines[idx].romanLyric = krcRomanizations[idx];
     }
   }
 

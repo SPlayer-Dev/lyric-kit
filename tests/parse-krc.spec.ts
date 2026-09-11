@@ -78,4 +78,24 @@ describe("parseKRC", () => {
     expect(lines[1].romanLyric).toBe("Roman 2");
     expect(metadata.timingMode).toBe("Word");
   });
+
+  it("应支持 [language:...] 标签位于歌词文件尾部时的正确回填", () => {
+    const payload = {
+      content: [
+        { type: 1, lyricContent: [["尾部翻译1"], ["尾部翻译2"]] },
+        { type: 0, lyricContent: [["Tail 1"], ["Tail 2"]] },
+      ],
+    };
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(payload));
+    const binary = Array.from(jsonBytes, (byte) => String.fromCharCode(byte)).join("");
+    const b64 = globalThis.btoa(binary);
+    const text = `[1000,1000]<0,500>主<500,500>词\n[2000,1000]<0,500>二<500,500>行\n[language:${b64}]`;
+    const { lines } = parseKRC(text, { extractMetadata: true });
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0].translatedLyric).toBe("尾部翻译1");
+    expect(lines[0].romanLyric).toBe("Tail 1");
+    expect(lines[1].translatedLyric).toBe("尾部翻译2");
+    expect(lines[1].romanLyric).toBe("Tail 2");
+  });
 });

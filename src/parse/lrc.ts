@@ -3,6 +3,7 @@ import type { LyricLine, LyricMetadata, LyricResult, LyricWord, ParseOptions } f
 import { detectBackgroundLine, splitTrailingBackground } from "../utils/bg";
 import { applyLrcMetaTag, applyTimestampOffset, META_TAG_RE } from "../utils/meta";
 import { LAST_LINE_FALLBACK_MS } from "../utils/sync";
+import { getLineText } from "../utils/text";
 import { ANGLE_TIME_RE, BRACKET_TIME_RE, parseTime } from "../utils/timestamp";
 import { pushCleanWord } from "../utils/word";
 
@@ -251,22 +252,22 @@ export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult 
 
   const merged: LyricLine[] = [];
   for (const line of lines) {
-    const currentText = line.words
-      .map((word) => word.word)
-      .join("")
-      .trim();
+    const currentText = getLineText(line);
 
     // 若当前行是空行标记，若同时间戳已存在正文行则丢弃该冗余空行，否则暂存作为时间截止标记
     if (!currentText) {
-      const hasExistingMain = merged.some(
-        (candidate) =>
-          candidate.startTime === line.startTime &&
-          candidate.isBG === line.isBG &&
-          candidate.words
-            .map((word) => word.word)
-            .join("")
-            .trim() !== "",
-      );
+      let hasExistingMain = false;
+      for (let searchIndex = merged.length - 1; searchIndex >= 0; searchIndex--) {
+        const candidate = merged[searchIndex];
+        if (candidate.startTime < line.startTime) break;
+        if (candidate.startTime === line.startTime && candidate.isBG === line.isBG) {
+          const candidateText = getLineText(candidate);
+          if (candidateText !== "") {
+            hasExistingMain = true;
+            break;
+          }
+        }
+      }
       if (!hasExistingMain) {
         merged.push(line);
       }
@@ -276,11 +277,9 @@ export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult 
     let target: LyricLine | undefined;
     for (let searchIndex = merged.length - 1; searchIndex >= 0; searchIndex--) {
       const candidate = merged[searchIndex];
+      if (candidate.startTime < line.startTime) break;
       if (candidate.startTime === line.startTime && candidate.isBG === line.isBG) {
-        const candidateText = candidate.words
-          .map((word) => word.word)
-          .join("")
-          .trim();
+        const candidateText = getLineText(candidate);
         if (candidateText) {
           // 候选行是有实际文本的正文行，可作为翻译或音译的合并目标
           target = candidate;
@@ -331,15 +330,7 @@ export const parseLRC = (text: string, options: ParseOptions = {}): LyricResult 
   // 过滤空行：在倒序计算 endTime 阶段，空行已作为时间截止标记界定了前一行的结束时间。
   // 若未显式开启 keepEmptyLines（默认 false），输出最终歌词行时彻底剔除纯空白文本行，保持歌词列表干净；
   // 若开启 keepEmptyLines（true），则完整保留该行（包含起止时间，起于间奏、止于下一行开头），交由播放器处理。
-  const resultLines = keepEmptyLines
-    ? merged
-    : merged.filter(
-        (line) =>
-          line.words
-            .map((word) => word.word)
-            .join("")
-            .trim() !== "",
-      );
+  const resultLines = keepEmptyLines ? merged : merged.filter((line) => getLineText(line) !== "");
 
   if (applyOffset && metadata.offset) {
     applyTimestampOffset(resultLines, metadata.offset);

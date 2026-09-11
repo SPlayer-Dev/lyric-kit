@@ -22,18 +22,7 @@ export const findLyricIndex = (lines: LyricLine[], time: number, prevIndex = -1)
   }
 
   // 二分查找：找最后一个 startTime <= time 的行
-  let low = 0;
-  let high = lines.length - 1;
-  let result = -1;
-  while (low <= high) {
-    const midIndex = (low + high) >>> 1;
-    if (lines[midIndex].startTime <= time) {
-      result = midIndex;
-      low = midIndex + 1;
-    } else {
-      high = midIndex - 1;
-    }
-  }
+  const result = pickLatestStartedIndex(lines, time);
 
   // 在该行时间范围内，或处于该行 endTime 与下一行 startTime 之间的间隙，都停留在该行
   if (result >= 0) {

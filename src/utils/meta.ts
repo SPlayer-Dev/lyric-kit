@@ -50,6 +50,12 @@ export const applyTimestampOffset = (lines: LyricLine[], offset: number): void =
     for (const word of line.words) {
       word.startTime = Math.max(0, word.startTime + offset);
       word.endTime = Math.max(0, word.endTime + offset);
+      if (word.ruby) {
+        for (const rubyItem of word.ruby) {
+          rubyItem.startTime = Math.max(0, rubyItem.startTime + offset);
+          rubyItem.endTime = Math.max(0, rubyItem.endTime + offset);
+        }
+      }
     }
   }
 };

@@ -1,4 +1,5 @@
 import type { LyricLine, LyricWord } from "../types";
+import { getLineText } from "./text";
 
 /** 行首括号（全 / 半角），允许前导空白 */
 const OPEN_PAREN_RE = /^\s*[（(]/;
@@ -19,11 +20,11 @@ const HAN_RE = /\p{Script=Han}/u;
 const KANA_ONLY_RE = /^[\p{Script=Hiragana}\p{Script=Katakana}\u30fc\s]+$/u;
 
 /**
- * 拼接单词数组为纯文本字符串
+ * 拼接单词数组为纯文本字符串（保留 endsWithSpace 空格）
  * @param words - 歌词单词数组
  * @returns 拼接后的纯文本
  */
-const joinedWords = (words: LyricWord[]): string => words.map((word) => word.word).join("");
+const joinedWords = (words: LyricWord[]): string => getLineText(words);
 
 /**
  * 剥除文本两端的括号、尾随语气标点与空白字符
@@ -85,6 +86,43 @@ const isJapaneseRubyTail = (words: LyricWord[], openIndex: number): boolean => {
 };
 
 /**
+ * 剥除单词数组首尾的包裹括号，清理空节点并修补起止时间
+ * @param words - 待处理的单词数组
+ * @param originalStartTime - 原始起始时间戳
+ * @param originalEndTime - 原始结束时间戳
+ * @returns 清理后的有效单词数组，若全空则返回 null
+ */
+const stripParensFromWords = (
+  words: LyricWord[],
+  originalStartTime: number,
+  originalEndTime: number,
+): LyricWord[] | null => {
+  for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
+    if (OPEN_PAREN_RE.test(words[wordIndex].word)) {
+      words[wordIndex].word = words[wordIndex].word.replace(OPEN_PAREN_RE, "");
+      break;
+    }
+  }
+
+  for (let wordIndex = words.length - 1; wordIndex >= 0; wordIndex--) {
+    if (CLOSE_PAREN_RE.test(words[wordIndex].word)) {
+      words[wordIndex].word = words[wordIndex].word.replace(CLOSE_PAREN_RE, "");
+      break;
+    }
+  }
+
+  const cleaned = words.filter((word) => word.word !== "");
+  if (cleaned.length === 0) return null;
+
+  cleaned[0].startTime = Math.min(cleaned[0].startTime, originalStartTime);
+  cleaned[cleaned.length - 1].endTime = Math.max(
+    cleaned[cleaned.length - 1].endTime,
+    originalEndTime,
+  );
+  return cleaned;
+};
+
+/**
  * 检测整行是否为背景人声并就地剥离包裹括号（清除空节点并保持时间跨度）
  * @param words - 行内单词数组，命中时原地修改首尾单词并清理空节点
  * @param enabled - 是否启用括号启发式检测
@@ -102,28 +140,8 @@ export const detectBackgroundLine = (words: LyricWord[], enabled = true): boolea
   const originalStartTime = words[0].startTime;
   const originalEndTime = words[words.length - 1].endTime;
 
-  for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
-    if (OPEN_PAREN_RE.test(words[wordIndex].word)) {
-      words[wordIndex].word = words[wordIndex].word.replace(OPEN_PAREN_RE, "");
-      break;
-    }
-  }
-
-  for (let wordIndex = words.length - 1; wordIndex >= 0; wordIndex--) {
-    if (CLOSE_PAREN_RE.test(words[wordIndex].word)) {
-      words[wordIndex].word = words[wordIndex].word.replace(CLOSE_PAREN_RE, "");
-      break;
-    }
-  }
-
-  const cleaned = words.filter((word) => word.word !== "");
-  if (cleaned.length === 0) return false;
-
-  cleaned[0].startTime = Math.min(cleaned[0].startTime, originalStartTime);
-  cleaned[cleaned.length - 1].endTime = Math.max(
-    cleaned[cleaned.length - 1].endTime,
-    originalEndTime,
-  );
+  const cleaned = stripParensFromWords(words, originalStartTime, originalEndTime);
+  if (!cleaned) return false;
 
   words.length = 0;
   words.push(...cleaned);
@@ -227,28 +245,8 @@ export const splitTrailingBackground = (line: LyricLine, enabled = true): LyricL
   const originalBgStart = bgWords[0].startTime;
   const originalBgEnd = bgWords[bgWords.length - 1].endTime;
 
-  for (let wordIndex = 0; wordIndex < bgWords.length; wordIndex++) {
-    if (OPEN_PAREN_RE.test(bgWords[wordIndex].word)) {
-      bgWords[wordIndex].word = bgWords[wordIndex].word.replace(OPEN_PAREN_RE, "");
-      break;
-    }
-  }
-
-  for (let wordIndex = bgWords.length - 1; wordIndex >= 0; wordIndex--) {
-    if (CLOSE_PAREN_RE.test(bgWords[wordIndex].word)) {
-      bgWords[wordIndex].word = bgWords[wordIndex].word.replace(CLOSE_PAREN_RE, "");
-      break;
-    }
-  }
-
-  const cleaned = bgWords.filter((word) => word.word !== "");
-  if (cleaned.length === 0) return null;
-
-  cleaned[0].startTime = Math.min(cleaned[0].startTime, originalBgStart);
-  cleaned[cleaned.length - 1].endTime = Math.max(
-    cleaned[cleaned.length - 1].endTime,
-    originalBgEnd,
-  );
+  const cleaned = stripParensFromWords(bgWords, originalBgStart, originalBgEnd);
+  if (!cleaned) return null;
 
   const mainWords = words.slice(0, openIndex).filter((word) => word.word !== "");
   if (mainWords.length === 0) return null;

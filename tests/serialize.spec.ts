@@ -83,6 +83,26 @@ describe("serialize", () => {
     expect(elrc).toBe("[00:01.00]<00:01.00>Hello <00:02.00>World");
   });
 
+  it("toSRT 应正确导出 endsWithSpace 词间空格，防止西文单词粘连", () => {
+    const lines: LyricLine[] = [
+      {
+        startTime: 1000,
+        endTime: 3000,
+        words: [
+          { startTime: 1000, endTime: 2000, word: "Hello", endsWithSpace: true },
+          { startTime: 2000, endTime: 3000, word: "World" },
+        ],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: false,
+        isDuet: false,
+      },
+    ];
+    const srt = toSRT(lines);
+    expect(srt).toContain("Hello World");
+    expect(srt).not.toContain("HelloWorld");
+  });
+
   it("toTTML 应支持导出 tts:ruby、songPart、endsWithSpace 与 AMLL 特性", () => {
     const lines: LyricLine[] = [
       {

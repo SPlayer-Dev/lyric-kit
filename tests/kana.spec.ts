@@ -172,5 +172,28 @@ describe("Kana / Ruby Furigana Support", () => {
       expect(result.lines[0].words[1].word).toBe("物");
       expect(result.lines[0].words[1].ruby?.[0].word).toBe("ぶつ");
     });
+
+    it("开启 applyOffset 时应同步将 offset 累加至 word.ruby 的起止时间", () => {
+      const qrcText = `[offset:500]
+[kana:1かい1ぶつ]
+[1000,1000]怪(1000,500)物(1500,500)`;
+
+      const result = parseQRC(qrcText, { extractMetadata: true, applyOffset: true });
+      const line = result.lines[0];
+      expect(line.startTime).toBe(1500);
+      expect(line.endTime).toBe(2500);
+      expect(line.words[0].startTime).toBe(1500);
+      expect(line.words[0].endTime).toBe(2000);
+      expect(line.words[0].ruby?.[0]).toEqual({
+        word: "かい",
+        startTime: 1500,
+        endTime: 2000,
+      });
+      expect(line.words[1].ruby?.[0]).toEqual({
+        word: "ぶつ",
+        startTime: 2000,
+        endTime: 2500,
+      });
+    });
   });
 });

@@ -1,16 +1,6 @@
 import type { LyricLine } from "../types";
+import { getLineText } from "../utils/text";
 import { formatLrcTime } from "../utils/timestamp";
-
-/**
- * 获取歌词行包含词尾空格的完整主文本
- * @param line - 歌词行对象
- * @returns 拼接后的整行文本
- */
-const lineMainText = (line: LyricLine): string =>
-  line.words
-    .map((word) => word.word + (word.endsWithSpace ? " " : ""))
-    .join("")
-    .trim();
 
 /**
  * 将背景人声文本包裹括号，防止回读与翻译冲突
@@ -36,7 +26,7 @@ const formatBgText = (text: string): string => {
 export const toLRC = (lines: LyricLine[]): string => {
   const out: string[] = [];
   for (const line of lines) {
-    let text = lineMainText(line);
+    let text = getLineText(line);
     if (!text) continue;
     if (line.isBG) text = formatBgText(text);
     const ts = `[${formatLrcTime(line.startTime)}]`;

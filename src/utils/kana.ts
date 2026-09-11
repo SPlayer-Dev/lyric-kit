@@ -85,8 +85,6 @@ export const parseKanaUnits = (rawKanaTag: string): KanaUnit[] => {
 
 /** 汉字在歌词中的定位项 */
 interface KanjiLocation {
-  lineIndex: number;
-  wordIndex: number;
   charIndexInWord: number;
   wordRef: LyricWord;
 }
@@ -112,8 +110,6 @@ export const applyKanaToLines = (lines: LyricLine[], rawKanaTag: string): void =
       for (let charIndex = 0; charIndex < wordText.length; charIndex++) {
         if (KANJI_REGEX.test(wordText[charIndex])) {
           kanjiLocations.push({
-            lineIndex,
-            wordIndex,
             charIndexInWord: charIndex,
             wordRef: currentWord,
           });

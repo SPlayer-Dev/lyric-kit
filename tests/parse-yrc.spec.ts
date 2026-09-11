@@ -55,4 +55,12 @@ describe("parseYRC", () => {
     expect(metadata.songwriters).toEqual(["方文山", "周杰伦"]);
     expect(metadata.artist).toEqual(["周杰伦"]);
   });
+
+  it("应正确解析包含英文冒号或多个冒号的元数据内容（取最靠前的冒号分割）", () => {
+    const text = `[0,0]{"t":0,"c":[{"tx":"作曲：John: Smith"},{"tx":"歌手: Jack: Daniel"}]}\n[100,1000](100,500,0)A(600,500,0)B`;
+    const { metadata } = parseYRC(text, { extractMetadata: true });
+
+    expect(metadata.songwriters).toEqual(["John: Smith"]);
+    expect(metadata.artist).toEqual(["Jack: Daniel"]);
+  });
 });

@@ -156,4 +156,32 @@ describe("stripLyricMetadata", () => {
     const stripped = stripLyricMetadata(lines);
     expect(stripped).toHaveLength(1);
   });
+
+  it("应支持自定义 keywords 与默认预归一化规则合并生效", () => {
+    const lines = [makeLine("特殊协力：张三"), makeLine("词：李四"), makeLine("海风轻拂着发梢")];
+
+    const stripped = stripLyricMetadata(lines, { keywords: ["特殊协力"] });
+    expect(stripped).toHaveLength(1);
+    expect(stripped[0].words[0].word).toBe("海风轻拂着发梢");
+  });
+
+  it("useDefaultRules 为 false 时应仅应用自定义规则", () => {
+    const lines = [makeLine("词：李四"), makeLine("海风轻拂着发梢")];
+
+    const stripped = stripLyricMetadata(lines, { useDefaultRules: false });
+    expect(stripped).toHaveLength(2);
+  });
+
+  it("单词含首尾空白时行文本应先 trim 再匹配（锚定正则与空白行跳过依赖此行为）", () => {
+    const anchored = stripLyricMetadata([makeLine(" 纯音乐，请欣赏 "), makeLine("歌词正文")]);
+    expect(anchored).toHaveLength(1);
+    expect(anchored[0].words[0].word).toBe("歌词正文");
+
+    const blankSkipped = stripLyricMetadata([
+      makeLine(" "),
+      makeLine("作词：张三"),
+      makeLine("歌词正文"),
+    ]);
+    expect(blankSkipped).toHaveLength(1);
+  });
 });

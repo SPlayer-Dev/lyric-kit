@@ -76,7 +76,11 @@ const clearResult = (): void => {
   resultEl.replaceChildren();
 };
 
-const lineMainText = (line: LyricLine): string => line.words.map((w) => w.word).join("");
+const lineMainText = (line: LyricLine): string =>
+  line.words
+    .map((w) => w.word + (w.endsWithSpace ? " " : ""))
+    .join("")
+    .trim();
 
 // ---- 结果渲染：歌词行 + 可展开的逐字详情 ----
 

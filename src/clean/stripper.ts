@@ -4,6 +4,7 @@
  */
 
 import type { LyricLine, StripOptions } from "../types";
+import { getLineText } from "../utils/text";
 import { defaultKeywords, defaultRegexes } from "./excludeRules";
 
 const STRICT_MATCH_SEPARATORS = new Set([
@@ -25,6 +26,28 @@ const STRICT_MATCH_SEPARATORS = new Set([
   "『",
   "「",
 ]);
+
+/**
+ * 归一化关键词字符串（转小写并移除空格）
+ * @param str - 原始字符串
+ * @returns 归一化后的字符串
+ */
+const normalizeKw = (str: string): string =>
+  str.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
+
+/** 模块级预归一化的默认关键词 */
+const NORMALIZED_DEFAULT_KEYWORDS: readonly string[] = defaultKeywords.map(normalizeKw);
+
+/** 模块级预编译的默认严格正则列表 */
+const COMPILED_DEFAULT_REGEXES: readonly RegExp[] = defaultRegexes
+  .map((pattern) => {
+    try {
+      return new RegExp(pattern, "i");
+    } catch {
+      return null;
+    }
+  })
+  .filter((re): re is RegExp => re !== null);
 
 interface ScanLimitConfig {
   ratio: number;
@@ -54,19 +77,6 @@ const calculateScanLimit = (config: ScanLimitConfig, totalLines: number): number
   const proportional = Math.ceil(totalLines * config.ratio);
   const clamped = Math.max(config.minLines, Math.min(proportional, config.maxLines));
   return Math.min(clamped, totalLines);
-};
-
-/**
- * 提取歌词行的纯文本内容
- * @param line - 歌词行对象
- * @returns 拼接后的纯文本字符串
- */
-const getLineText = (line: LyricLine): string => {
-  if (!line?.words) return "";
-  return line.words
-    .map((word) => word.word)
-    .join("")
-    .trim();
 };
 
 /**
@@ -112,14 +122,6 @@ const cleanTextForCheck = (text: string): string => {
   }
   return processed;
 };
-
-/**
- * 归一化关键词字符串（转小写并移除空格）
- * @param str - 原始字符串
- * @returns 归一化后的字符串
- */
-const normalizeKw = (str: string): string =>
-  str.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
 
 /**
  * 检查文本是否严格匹配元数据关键词或正则表达式
@@ -255,25 +257,44 @@ export const stripLyricMetadata = (
 
   const useDefaultRules = options.useDefaultRules ?? true;
 
-  const rawKeywords = [
-    ...new Set([...(useDefaultRules ? defaultKeywords : []), ...(options.keywords ?? [])]),
-  ];
-  const rawRegexes = [
-    ...new Set([...(useDefaultRules ? defaultRegexes : []), ...(options.regexPatterns ?? [])]),
-  ];
-  const rawSoftRegexes = options.softMatchRegexes ?? [];
-
-  const normalizedKeywords = rawKeywords.map(normalizeKw);
-
-  const regexes: RegExp[] = [];
-  for (const pattern of rawRegexes) {
-    try {
-      regexes.push(new RegExp(pattern, "i"));
-    } catch {
-      // 忽略非法正则
-    }
+  let normalizedKeywords: readonly string[];
+  if (!useDefaultRules) {
+    normalizedKeywords = [...new Set((options.keywords ?? []).map(normalizeKw))];
+  } else if (!options.keywords || options.keywords.length === 0) {
+    normalizedKeywords = NORMALIZED_DEFAULT_KEYWORDS;
+  } else {
+    normalizedKeywords = [
+      ...new Set([...NORMALIZED_DEFAULT_KEYWORDS, ...options.keywords.map(normalizeKw)]),
+    ];
   }
 
+  let regexes: readonly RegExp[];
+  if (!useDefaultRules) {
+    regexes = (options.regexPatterns ?? [])
+      .map((pattern) => {
+        try {
+          return new RegExp(pattern, "i");
+        } catch {
+          return null;
+        }
+      })
+      .filter((re): re is RegExp => re !== null);
+  } else if (!options.regexPatterns || options.regexPatterns.length === 0) {
+    regexes = COMPILED_DEFAULT_REGEXES;
+  } else {
+    const extraRegexes = (options.regexPatterns ?? [])
+      .map((pattern) => {
+        try {
+          return new RegExp(pattern, "i");
+        } catch {
+          return null;
+        }
+      })
+      .filter((re): re is RegExp => re !== null);
+    regexes = [...COMPILED_DEFAULT_REGEXES, ...extraRegexes];
+  }
+
+  const rawSoftRegexes = options.softMatchRegexes ?? [];
   const softRegexes: RegExp[] = [];
   for (const pattern of rawSoftRegexes) {
     try {

@@ -83,15 +83,21 @@ export const parseYRC = (text: string, options: ParseOptions = {}): LyricResult 
               const rawTx = contentList[idx]?.tx?.trim();
               if (!rawTx) continue;
 
-              const colonIdx = rawTx.indexOf(":");
-              const fullColonIdx = colonIdx === -1 ? rawTx.indexOf("：") : colonIdx;
+              const halfColonIdx = rawTx.indexOf(":");
+              const fullColonIdx = rawTx.indexOf("：");
+              const splitIdx =
+                halfColonIdx === -1
+                  ? fullColonIdx
+                  : fullColonIdx === -1
+                    ? halfColonIdx
+                    : Math.min(halfColonIdx, fullColonIdx);
 
               let role = "";
               let value = "";
 
-              if (fullColonIdx > -1) {
-                role = rawTx.slice(0, fullColonIdx).trim();
-                value = rawTx.slice(fullColonIdx + 1).trim();
+              if (splitIdx > -1) {
+                role = rawTx.slice(0, splitIdx).trim();
+                value = rawTx.slice(splitIdx + 1).trim();
                 if (!value && idx + 1 < contentList.length) {
                   value = (contentList[idx + 1]?.tx || "").trim();
                   idx++;
