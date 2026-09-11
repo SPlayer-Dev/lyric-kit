@@ -1,7 +1,9 @@
 # lyric-kit
 
-A TypeScript library for parsing, serializing, and synchronizing lyrics across formats (LRC, TTML, QRC, KRC, YRC, LyS, SRT, ASS).
+A high-performance TypeScript library for parsing, serializing, and synchronizing lyrics across multiple formats (LRC, TTML, QRC, KRC, YRC, LyS, SRT, ASS).
 
+[![npm version](https://img.shields.io/npm/v/lyric-kit.svg?color=3399ff)](https://www.npmjs.com/package/lyric-kit)
+[![npm downloads](https://img.shields.io/npm/dm/lyric-kit.svg)](https://www.npmjs.com/package/lyric-kit)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/types-TypeScript-blue.svg)](#)
 [![Zero Dependency](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#)
@@ -80,19 +82,38 @@ const cleanedLines = stripLyricMetadata(lines, {
 });
 ```
 
+### Infer Lyric Language
+
+Automatically infers and assigns language codes (`ja` / `ko` / `zh-CN` / `und-Latn`) using kana furigana (ruby), full-song translation cues, and CJK script density ratios. This helps UI layers select localized CJK glyphs or wire up TTS / pronunciation tools:
+
+```ts
+import { applyLyricLanguages } from "lyric-kit";
+
+// In-place language inference on each line
+applyLyricLanguages(lines);
+console.log(lines[0].language); // e.g., "ja"
+```
+
 ### Playback Synchronization
 
 ```ts
-import { findLyricIndex, getWordSweepProgress } from "lyric-kit";
+import {
+  findActiveLyricIndices,
+  findLyricIndex,
+  getWordSweepProgress,
+} from "lyric-kit";
 
-// Find current active line by playback time (ms)
+// 1. Single-line quick lookup
 const currentMs = 1500;
 const lineIndex = findLyricIndex(lines, currentMs);
+
+// 2. Multi-line overlap lookup (returns all active line indices at currentMs)
+const activeIndices = findActiveLyricIndices(lines, currentMs);
 
 if (lineIndex !== -1) {
   const activeLine = lines[lineIndex];
 
-  // Calculate karaoke highlight progress [0, 1] per syllable/word
+  // 3. Calculate smooth karaoke sweep progress [0, 1] per syllable/word
   for (const word of activeLine.words) {
     const progress = getWordSweepProgress(word, activeLine.startTime, currentMs);
   }
@@ -122,7 +143,7 @@ Parses lyrics and returns a `LyricResult`.
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `format` | `LyricFormat` | auto | Explicit format override (`lrc`, `ttml`, `qrc`, `krc`, `yrc`, `lys`, `srt`, `ass`). |
-| `detectBackground` | `boolean` | `false` | Detect and split parenthesized background/harmony vocals. |
+| `detectBackground` | `boolean` | `true` | Detect and split parenthesized background/harmony vocals. |
 | `extractMetadata` | `boolean` | `false` | Extract song metadata (title, artist, album, creators, offset). |
 | `cleanKangxi` | `boolean` | `false` | Normalize KangXi radicals and CJK compatibility ideographs to standard characters. |
 | `applyOffset` | `boolean` | `false` | Automatically apply `metadata.offset` ms to all lines and words (`newTime = originalTime + offset`). |
@@ -196,6 +217,12 @@ interface LyricWord {
   obscene?: boolean;
   endsWithSpace?: boolean;
   emptyBeat?: number;
+}
+
+interface LyricSpan {
+  word: string;
+  startTime: number; // ms
+  endTime: number;   // ms
 }
 ```
 

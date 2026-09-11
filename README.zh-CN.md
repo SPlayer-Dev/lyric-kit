@@ -1,7 +1,9 @@
 # lyric-kit
 
-用于解析、序列化及同步多格式歌词（LRC、TTML、QRC、KRC、YRC、LyS、SRT、ASS）的 TypeScript 工具库。
+用于解析、序列化及同步多格式歌词（LRC、TTML、QRC、KRC、YRC、LyS、SRT、ASS）的高性能 TypeScript 工具库。
 
+[![npm version](https://img.shields.io/npm/v/lyric-kit.svg?color=3399ff)](https://www.npmjs.com/package/lyric-kit)
+[![npm downloads](https://img.shields.io/npm/dm/lyric-kit.svg)](https://www.npmjs.com/package/lyric-kit)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/types-TypeScript-blue.svg)](#)
 [![Zero Dependency](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#)
@@ -80,19 +82,38 @@ const cleanedLines = stripLyricMetadata(lines, {
 });
 ```
 
+### 智能推断歌词语言
+
+自动结合假名振假名注音（ruby）、全曲翻译与 CJK 字符比例，为歌词行推断并注入语言代码（`ja` / `ko` / `zh-CN` / `und-Latn`），便于界面选择字形（CJK 异体字）或对接 TTS / 音译：
+
+```ts
+import { applyLyricLanguages } from "lyric-kit";
+
+// 原地推断并填充各行的 language 属性
+applyLyricLanguages(lines);
+console.log(lines[0].language); // 例如: "ja"
+```
+
 ### 播放同步与卡拉OK进度
 
 ```ts
-import { findLyricIndex, getWordSweepProgress } from "lyric-kit";
+import {
+  findActiveLyricIndices,
+  findLyricIndex,
+  getWordSweepProgress,
+} from "lyric-kit";
 
-// 根据当前播放时间（毫秒）查找当前激活行
+// 1. 单行快速查找当前激活行
 const currentMs = 1500;
 const lineIndex = findLyricIndex(lines, currentMs);
+
+// 2. 多行和声/对唱重叠查找（返回当前时间所有活跃行下标）
+const activeIndices = findActiveLyricIndices(lines, currentMs);
 
 if (lineIndex !== -1) {
   const activeLine = lines[lineIndex];
 
-  // 计算每个字/音节的卡拉OK染色进度 [0, 1]
+  // 3. 计算每个字/音节的卡拉OK平滑染色进度 [0, 1]
   for (const word of activeLine.words) {
     const progress = getWordSweepProgress(word, activeLine.startTime, currentMs);
   }
@@ -122,7 +143,7 @@ if (lineIndex !== -1) {
 | 参数 | 类型 | 默认值 | 说明 |
 | :--- | :--- | :--- | :--- |
 | `format` | `LyricFormat` | 自动检测 | 手动指定格式（`lrc`、`ttml`、`qrc`、`krc`、`yrc`、`lys`、`srt`、`ass`）。 |
-| `detectBackground` | `boolean` | `false` | 是否识别并分离括号内的和声与伴唱（标记为 `isBG`）。 |
+| `detectBackground` | `boolean` | `true` | 是否识别并分离括号内的和声与伴唱（标记为 `isBG`）。 |
 | `extractMetadata` | `boolean` | `false` | 是否提取歌曲元数据（歌曲名、歌手、专辑、制作人员、偏移量等）。 |
 | `cleanKangxi` | `boolean` | `false` | 是否将康熙部首及 CJK 兼容字符规范化为通用汉字。 |
 | `applyOffset` | `boolean` | `false` | 是否自动将 `metadata.offset` 毫秒数累加至所有行和词的时间戳中（`newTime = originalTime + offset`）。 |
@@ -196,6 +217,12 @@ interface LyricWord {
   obscene?: boolean;
   endsWithSpace?: boolean;
   emptyBeat?: number;
+}
+
+interface LyricSpan {
+  word: string;
+  startTime: number; // 毫秒 (ms)
+  endTime: number;   // 毫秒 (ms)
 }
 ```
 
