@@ -74,4 +74,50 @@ describe("normalizeLyricLines", () => {
     normalizeLyricLines(lines);
     expect(lines[0].endTime).toBe(2000);
   });
+
+  it("首行背景行与连续背景行无依附主行时应自动降级为主行", () => {
+    const lines: LyricLine[] = [
+      {
+        startTime: 500,
+        endTime: 1000,
+        words: [{ startTime: 500, endTime: 1000, word: "BG 1" }],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: true,
+        isDuet: false,
+      },
+      {
+        startTime: 1000,
+        endTime: 2000,
+        words: [{ startTime: 1000, endTime: 2000, word: "Main" }],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: false,
+        isDuet: false,
+      },
+      {
+        startTime: 1200,
+        endTime: 1800,
+        words: [{ startTime: 1200, endTime: 1800, word: "BG 2" }],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: true,
+        isDuet: false,
+      },
+      {
+        startTime: 1300,
+        endTime: 1900,
+        words: [{ startTime: 1300, endTime: 1900, word: "BG 3" }],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: true,
+        isDuet: false,
+      },
+    ];
+
+    normalizeLyricLines(lines);
+    expect(lines[0].isBG).toBe(false);
+    expect(lines[2].isBG).toBe(true);
+    expect(lines[3].isBG).toBe(false);
+  });
 });

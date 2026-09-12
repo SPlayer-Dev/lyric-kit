@@ -71,9 +71,10 @@ export const normalizeLyricLines = (lines: LyricLine[]): void => {
 
   // 连续背景行折叠
   let consecutiveBg = 0;
-  for (const line of lines) {
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
     if (line.isBG) {
-      if (++consecutiveBg > 1) line.isBG = false;
+      if (lineIdx === 0 || ++consecutiveBg > 1) line.isBG = false;
     } else {
       consecutiveBg = 0;
     }
