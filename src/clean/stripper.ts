@@ -7,26 +7,6 @@ import type { LyricLine, StripOptions } from "../types";
 import { getLineText } from "../utils/text";
 import { defaultKeywords, defaultRegexes } from "./excludeRules";
 
-const STRICT_MATCH_SEPARATORS = new Set([
-  ":",
-  "：",
-  ",",
-  "，",
-  ".",
-  "。",
-  "!",
-  "！",
-  "-",
-  "_",
-  "(",
-  "（",
-  "[",
-  "【",
-  "{",
-  "『",
-  "「",
-]);
-
 /**
  * 归一化关键词字符串（转小写并移除空格）
  * @param str - 原始字符串
@@ -35,8 +15,29 @@ const STRICT_MATCH_SEPARATORS = new Set([
 const normalizeKw = (str: string): string =>
   str.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
 
-/** 模块级预归一化的默认关键词 */
-const NORMALIZED_DEFAULT_KEYWORDS: readonly string[] = defaultKeywords.map(normalizeKw);
+/**
+ * 无冒号回退匹配时，关键词前缀后允许紧跟的分隔符（归一化后形态）
+ * 用于 "作词-青石"、"编曲（林一）" 这类无冒号分隔格式
+ */
+const NO_COLON_SEPARATORS = new Set([
+  ":",
+  ",",
+  ".",
+  "!",
+  "-",
+  "_",
+  "(",
+  "[",
+  "{",
+  "【",
+  "『",
+  "「",
+  "。",
+  "·",
+]);
+
+/** 模块级预归一化的默认关键词集合 */
+const NORMALIZED_DEFAULT_KEYWORDS: ReadonlySet<string> = new Set(defaultKeywords.map(normalizeKw));
 
 /** 模块级预编译的默认严格正则列表 */
 const COMPILED_DEFAULT_REGEXES: readonly RegExp[] = defaultRegexes
@@ -48,36 +49,6 @@ const COMPILED_DEFAULT_REGEXES: readonly RegExp[] = defaultRegexes
     }
   })
   .filter((re): re is RegExp => re !== null);
-
-interface ScanLimitConfig {
-  ratio: number;
-  minLines: number;
-  maxLines: number;
-}
-
-const DEFAULT_HEADER_LIMIT: ScanLimitConfig = {
-  ratio: 0.2,
-  minLines: 40,
-  maxLines: 140,
-};
-
-const DEFAULT_FOOTER_LIMIT: ScanLimitConfig = {
-  ratio: 0.2,
-  minLines: 40,
-  maxLines: 100,
-};
-
-/**
- * 计算动态扫描行数限制
- * @param config - 扫描限制配置对象
- * @param totalLines - 歌词总行数
- * @returns 最终计算出的最大扫描行数
- */
-const calculateScanLimit = (config: ScanLimitConfig, totalLines: number): number => {
-  const proportional = Math.ceil(totalLines * config.ratio);
-  const clamped = Math.max(config.minLines, Math.min(proportional, config.maxLines));
-  return Math.min(clamped, totalLines);
-};
 
 /**
  * 清除行两端的外层包装括号
@@ -124,109 +95,69 @@ const cleanTextForCheck = (text: string): string => {
 };
 
 /**
- * 检查文本是否严格匹配元数据关键词或正则表达式
- * @param text - 待检查的文本
- * @param normalizedKeywords - 归一化的关键词列表
+ * 判定单行文本是否为制作人或版权元数据行
+ * 判定机制：命中版权声明或纯音乐正则；包含冒号且冒号左侧职务 Key 匹配关键词库（支持单字职务、多字职务及复合双语）；无冒号时整行完全等于多字关键词，或以多字关键词开头并紧跟分隔符
+ *
+ * @param text - 待检查的行文本
+ * @param keywordSet - 归一化关键词集合
  * @param regexes - 正则表达式列表
- * @returns 是否严格匹配
+ * @returns 是否判定为元数据行
  */
-const isStrictMatch = (
+const isMetadataLine = (
   text: string,
-  normalizedKeywords: readonly string[],
+  keywordSet: ReadonlySet<string>,
   regexes: readonly RegExp[],
 ): boolean => {
-  const cleaned = cleanTextForCheck(text);
-  const normalizedText = normalizeKw(cleaned);
-
-  for (const kw of normalizedKeywords) {
-    if (normalizedText.startsWith(kw)) {
-      if (normalizedText.length === kw.length) return true;
-      const nextChar = normalizedText[kw.length];
-      if (STRICT_MATCH_SEPARATORS.has(nextChar)) return true;
-    }
-  }
   for (const regex of regexes) {
     if (regex.test(text)) return true;
   }
-  return false;
-};
 
-/**
- * 检查文本是否包含弱元数据特征（如冒号或匹配弱正则）
- * @param text - 待检查的文本
- * @param softRegexes - 弱匹配正则表达式列表
- * @returns 是否具备元数据特征
- */
-const looksLikeMetadata = (text: string, softRegexes: readonly RegExp[]): boolean => {
   const cleaned = cleanTextForCheck(text);
-  if (cleaned.includes(":") || cleaned.includes("：") || cleaned.includes("-")) return true;
-  for (const regex of softRegexes) {
-    if (regex.test(text)) return true;
+  const colonMatch = /[:：]/.exec(cleaned);
+
+  if (colonMatch) {
+    const rawKey = cleaned.slice(0, colonMatch.index).trim();
+    if (!rawKey) return false;
+
+    const key = normalizeKw(cleanTextForCheck(rawKey));
+    if (!key) return false;
+
+    if (keywordSet.has(key)) return true;
+
+    for (const kw of keywordSet) {
+      if (key.startsWith(kw)) {
+        const nextChar = key[kw.length];
+        if (
+          nextChar === "/" ||
+          nextChar === "&" ||
+          nextChar === "、" ||
+          nextChar === "+" ||
+          (nextChar >= "a" && nextChar <= "z")
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
+
+  const normalizedText = normalizeKw(cleaned);
+  if (normalizedText.length >= 2 && keywordSet.has(normalizedText)) {
+    return true;
+  }
+
+  // 无冒号回退：多字关键词前缀 + 紧随分隔符
+  for (const kw of keywordSet) {
+    if (kw.length < 2) continue;
+    if (normalizedText.startsWith(kw)) {
+      const nextChar = normalizedText[kw.length];
+      if (nextChar && NO_COLON_SEPARATORS.has(nextChar)) {
+        return true;
+      }
+    }
+  }
+
   return false;
-};
-
-/**
- * 查找头部连续元数据的截止位置
- * @param lines - 歌词行列表
- * @param startIndex - 扫描起始下标
- * @param normalizedKeywords - 归一化关键词列表
- * @param regexes - 严格正则表达式列表
- * @param softRegexes - 弱匹配正则表达式列表
- * @param limit - 最大扫描行数
- * @returns 头部有效歌词的起始下标
- */
-const findHeaderCutoff = (
-  lines: readonly LyricLine[],
-  startIndex: number,
-  normalizedKeywords: readonly string[],
-  regexes: readonly RegExp[],
-  softRegexes: readonly RegExp[],
-  limit: number,
-): number => {
-  let lastValidMetadataIndex = startIndex - 1;
-  for (let index = startIndex; index < limit; index++) {
-    if (index >= lines.length) break;
-    const text = getLineText(lines[index]);
-    if (!text) continue;
-    const strict = isStrictMatch(text, normalizedKeywords, regexes);
-    const weak = looksLikeMetadata(text, softRegexes);
-    if (!strict && !weak) break;
-    if (strict) lastValidMetadataIndex = index;
-  }
-  return lastValidMetadataIndex + 1;
-};
-
-/**
- * 查找尾部连续元数据的起始位置
- * @param lines - 歌词行列表
- * @param startIndex - 扫描起始下限
- * @param normalizedKeywords - 归一化关键词列表
- * @param regexes - 严格正则表达式列表
- * @param softRegexes - 弱匹配正则表达式列表
- * @param limit - 最大扫描行数
- * @returns 尾部元数据开始的下标
- */
-const findFooterCutoff = (
-  lines: readonly LyricLine[],
-  startIndex: number,
-  normalizedKeywords: readonly string[],
-  regexes: readonly RegExp[],
-  softRegexes: readonly RegExp[],
-  limit: number,
-): number => {
-  if (startIndex >= lines.length) return startIndex;
-  const scanEnd = Math.max(startIndex, lines.length - limit);
-  let firstValidFooterIndex = lines.length;
-  for (let index = lines.length - 1; index >= scanEnd; index--) {
-    const text = getLineText(lines[index]);
-    if (!text) continue;
-    const strict = isStrictMatch(text, normalizedKeywords, regexes);
-    const weak = looksLikeMetadata(text, softRegexes);
-    if (!strict && !weak) break;
-    if (strict) firstValidFooterIndex = index;
-  }
-  return firstValidFooterIndex;
 };
 
 /**
@@ -241,31 +172,15 @@ export const stripLyricMetadata = (
 ): LyricLine[] => {
   if (!lines || lines.length === 0) return [];
 
-  let scanStartIndex = 0;
-  if (options.matchMetadata) {
-    const { title, artists } = options.matchMetadata;
-    const firstLineText = getLineText(lines[0]);
-    if (title && artists && artists.length > 0 && firstLineText) {
-      const lowerText = firstLineText.toLowerCase();
-      const lowerTitle = title.toLowerCase();
-      if (lowerText.includes(lowerTitle)) {
-        const hasAnyArtist = artists.some((artist) => lowerText.includes(artist.toLowerCase()));
-        if (hasAnyArtist) scanStartIndex = 1;
-      }
-    }
-  }
-
   const useDefaultRules = options.useDefaultRules ?? true;
 
-  let normalizedKeywords: readonly string[];
+  let keywordSet: ReadonlySet<string>;
   if (!useDefaultRules) {
-    normalizedKeywords = [...new Set((options.keywords ?? []).map(normalizeKw))];
+    keywordSet = new Set((options.keywords ?? []).map(normalizeKw));
   } else if (!options.keywords || options.keywords.length === 0) {
-    normalizedKeywords = NORMALIZED_DEFAULT_KEYWORDS;
+    keywordSet = NORMALIZED_DEFAULT_KEYWORDS;
   } else {
-    normalizedKeywords = [
-      ...new Set([...NORMALIZED_DEFAULT_KEYWORDS, ...options.keywords.map(normalizeKw)]),
-    ];
+    keywordSet = new Set([...NORMALIZED_DEFAULT_KEYWORDS, ...options.keywords.map(normalizeKw)]);
   }
 
   let regexes: readonly RegExp[];
@@ -294,38 +209,84 @@ export const stripLyricMetadata = (
     regexes = [...COMPILED_DEFAULT_REGEXES, ...extraRegexes];
   }
 
-  const rawSoftRegexes = options.softMatchRegexes ?? [];
-  const softRegexes: RegExp[] = [];
-  for (const pattern of rawSoftRegexes) {
-    try {
-      softRegexes.push(new RegExp(pattern, "i"));
-    } catch {
-      // 忽略非法正则
+  // 预提取所有行文本，避免后续多次遍历时重复 map / join / trim
+  const lineTexts = lines.map(getLineText);
+  const excludeIndices = new Set<number>();
+
+  // 制作人与版权元数据全文精准判定
+  for (let idx = 0; idx < lines.length; idx++) {
+    const text = lineTexts[idx];
+    if (!text) continue;
+    if (isMetadataLine(text, keywordSet, regexes)) {
+      excludeIndices.add(idx);
     }
   }
 
-  const headerLimit = calculateScanLimit(DEFAULT_HEADER_LIMIT, lines.length);
-  const footerLimit = calculateScanLimit(DEFAULT_FOOTER_LIMIT, lines.length);
+  // 歌曲名与歌手匹配：在清理元数据后的前 5 行有效内容内扫描，
+  // 避免元数据行占用扫描窗口导致靠后的标题行漏判
+  if (options.matchMetadata) {
+    const { title, artists } = options.matchMetadata;
+    if (title && artists && artists.length > 0) {
+      const lowerTitle = title.toLowerCase();
+      let scanned = 0;
+      for (let idx = 0; idx < lines.length && scanned < 5; idx++) {
+        if (excludeIndices.has(idx)) continue;
+        const text = lineTexts[idx];
+        if (!text) continue;
+        scanned++;
+        const lowerText = text.toLowerCase();
+        if (lowerText.includes(lowerTitle)) {
+          const hasAnyArtist = artists.some((artist) => lowerText.includes(artist.toLowerCase()));
+          if (hasAnyArtist) {
+            excludeIndices.add(idx);
+          }
+        }
+      }
+    }
+  }
 
-  const startIdx = findHeaderCutoff(
-    lines,
-    scanStartIndex,
-    normalizedKeywords,
-    regexes,
-    softRegexes,
-    headerLimit,
-  );
+  // 关联背景行处理：若主行被剔除或背景行孤立无主，背景行联动剔除
+  let currentMainIdx = -1;
+  for (let idx = 0; idx < lines.length; idx++) {
+    if (!lines[idx].isBG) {
+      currentMainIdx = idx;
+    } else if (currentMainIdx === -1 || excludeIndices.has(currentMainIdx)) {
+      excludeIndices.add(idx);
+    }
+  }
 
-  const endIdx = findFooterCutoff(
-    lines,
-    startIdx,
-    normalizedKeywords,
-    regexes,
-    softRegexes,
-    footerLimit,
-  );
+  // 定位有效正文区间，排除正文开唱前与结束后的空白行与元数据
+  let firstContentIdx = -1;
+  for (let idx = 0; idx < lines.length; idx++) {
+    if (excludeIndices.has(idx)) continue;
+    if (lineTexts[idx].length > 0) {
+      firstContentIdx = idx;
+      break;
+    }
+  }
 
-  if (startIdx === 0 && endIdx === lines.length) return lines as LyricLine[];
+  if (firstContentIdx === -1) {
+    return [];
+  }
 
-  return lines.slice(startIdx, endIdx);
+  let lastContentIdx = -1;
+  for (let idx = lines.length - 1; idx >= firstContentIdx; idx--) {
+    if (excludeIndices.has(idx)) continue;
+    if (lineTexts[idx].length > 0) {
+      lastContentIdx = idx;
+      break;
+    }
+  }
+
+  for (let idx = 0; idx < firstContentIdx; idx++) {
+    excludeIndices.add(idx);
+  }
+
+  for (let idx = lastContentIdx + 1; idx < lines.length; idx++) {
+    excludeIndices.add(idx);
+  }
+
+  if (excludeIndices.size === 0) return lines as LyricLine[];
+
+  return lines.filter((_, idx) => !excludeIndices.has(idx));
 };

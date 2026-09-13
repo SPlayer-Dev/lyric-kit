@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { stripLyricMetadata } from "../src/clean/stripper";
 import { parseQRC } from "../src/parse";
 
 describe("parseQRC", () => {
@@ -88,5 +89,42 @@ describe("parseQRC", () => {
 
     expect(lines).toHaveLength(1);
     expect(lines[0].words.map((w) => w.word).join("")).toBe("原文");
+  });
+
+  it("应支持 QRC 逐字歌词首行附属背景行与制作人元数据完整清洗", () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<QrcInfos>
+<QrcHeadInfo SaveTime="1373437368" Version="100"/>
+<LyricInfo LyricCount="1">
+<Lyric_1 LyricType="1" LyricContent="[ti:晨曦微光]
+[ar:风铃乐队]
+[al:晨曦微光]
+[by:]
+[offset:0]
+[0,520]晨(0,34)曦(34,34)微(68,34)光(102,34) (136,34)-(170,34) (204,34)风(238,34)铃(272,34)乐(306,34)队(340,34) (374,34)((408,34)Wind(442,34) (476,34)Bell(510,34))(544,34)
+[520,530]词(520,132)：(652,132)青(784,132)石(916,132)
+[1050,530]曲(1050,132)：(1182,132)木(1314,132)棉(1446,132)
+[1580,520]编(1580,104)：(1684,104)白(1788,104)云(1892,104)
+[2111,4060]清(2111,180)晨 (2421,870)微(3291,130)风(3421,120)吹(3541,190)过(3731,190)安(3921,180)静(4101,130)的(4231,190)山(4421,180)谷(4601,380)
+[7291,1620]阳(7291,130)光(7421,120)洒(7541,190)落(7731,120)在(7851,190)小(8041,120)溪(8161,130)边(8291,190)
+"/>
+</LyricInfo>
+</QrcInfos>`;
+
+    const { lines, metadata } = parseQRC(xml, { extractMetadata: true });
+    expect(metadata.title).toEqual(["晨曦微光"]);
+    expect(metadata.artist).toEqual(["风铃乐队"]);
+
+    const cleaned = stripLyricMetadata(lines, {
+      matchMetadata: {
+        title: metadata.title?.[0],
+        artists: metadata.artist,
+      },
+    });
+
+    expect(cleaned).toHaveLength(2);
+    expect(cleaned[0].words.map((w) => w.word).join("")).toBe("清晨微风吹过安静的山谷");
+    expect(cleaned[0].words[1].endsWithSpace).toBe(true);
+    expect(cleaned[1].words.map((w) => w.word).join("")).toBe("阳光洒落在小溪边");
   });
 });
