@@ -45,6 +45,6 @@ export const serializeLyric = (
     case "srt":
       return toSRT(parsed.lines, options);
     default:
-      return toLRC(parsed.lines);
+      return toLRC(parsed.lines, options);
   }
 };

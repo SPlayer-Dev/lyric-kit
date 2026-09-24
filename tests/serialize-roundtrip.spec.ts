@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseSRT } from "../src/parse";
-import { serializeLyric, toSRT } from "../src/serialize";
+import { parseLRC, parseSRT } from "../src/parse";
+import { serializeLyric, toLRC, toSRT } from "../src/serialize";
 import type { LyricLine } from "../src/types";
 
 const makeLine = (
@@ -15,6 +15,39 @@ const makeLine = (
   romanLyric,
   isBG,
   isDuet: false,
+});
+
+describe("LRC 字段归属", () => {
+  it.each([false, true])("往返模式保留 isBG=%s 的翻译和罗马音", (isBG) => {
+    for (const translation of ["你好", ""]) {
+      for (const roman of ["konnichiwa", ""]) {
+        const line = makeLine(translation, roman, isBG);
+        const output = toLRC([line], { roundTrip: true });
+        const { lines } = parseLRC(output);
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toMatchObject({ isBG, translatedLyric: translation, romanLyric: roman });
+        expect(lines[0].words[0].word).toBe(line.words[0].word);
+        expect(serializeLyric([line], "lrc", { roundTrip: true })).toBe(output);
+      }
+    }
+  });
+
+  it("同时间戳主唱和伴唱的字段互不污染", () => {
+    const input = [makeLine("主译", "main"), makeLine("和声译", "echo", true)];
+    const before = structuredClone(input);
+    const result = parseLRC(toLRC(input, { roundTrip: true }));
+    expect(
+      result.lines.map(({ isBG, translatedLyric, romanLyric }) => ({
+        isBG,
+        translatedLyric,
+        romanLyric,
+      })),
+    ).toEqual(
+      input.map(({ isBG, translatedLyric, romanLyric }) => ({ isBG, translatedLyric, romanLyric })),
+    );
+    expect(input).toEqual(before);
+    expect(toLRC([makeLine("", "roman")])).toBe("[00:01.00]こんにちは\n[00:01.00]roman");
+  });
 });
 
 describe("SRT 兼容性与往返导出", () => {

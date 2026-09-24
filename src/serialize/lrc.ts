@@ -1,4 +1,4 @@
-import type { LyricLine } from "../types";
+import type { LyricLine, SerializeOptions } from "../types";
 import { getLineText } from "../utils/text";
 import { formatLrcTime } from "../utils/timestamp";
 
@@ -23,7 +23,7 @@ const formatBgText = (text: string): string => {
  * @param lines - 歌词行数组
  * @returns LRC 格式字符串
  */
-export const toLRC = (lines: LyricLine[]): string => {
+export const toLRC = (lines: LyricLine[], options: SerializeOptions = {}): string => {
   const out: string[] = [];
   for (const line of lines) {
     let text = getLineText(line);
@@ -31,10 +31,18 @@ export const toLRC = (lines: LyricLine[]): string => {
     if (line.isBG) text = formatBgText(text);
     const ts = `[${formatLrcTime(line.startTime)}]`;
     out.push(`${ts}${text}`);
-    if (line.translatedLyric) out.push(`${ts}${line.translatedLyric}`);
-    if (line.romanLyric) out.push(`${ts}${line.romanLyric}`);
+    appendAuxiliary(out, line, ts, options.roundTrip);
   }
   return out.join("\n");
+};
+
+/** 同步辅助行的声部标记，用占位翻译保留只有罗马音时的字段位置。 */
+const appendAuxiliary = (out: string[], line: LyricLine, ts: string, roundTrip = false): void => {
+  const wrap = (text: string): string => (roundTrip && line.isBG ? formatBgText(text) : text);
+  if (line.translatedLyric || (roundTrip && line.romanLyric)) {
+    out.push(`${ts}${wrap(line.translatedLyric || "//")}`);
+  }
+  if (line.romanLyric) out.push(`${ts}${wrap(line.romanLyric)}`);
 };
 
 /**
