@@ -77,7 +77,7 @@ const restored = parseLyric(srt, { multiLineMode: "bilingual" });
 
 The option also works with `toLRC` and `toEnhancedLRC`. LRC preserves background markers on auxiliary lines and uses `//` as a translation placeholder when only romanization is present. Enhanced LRC additionally emits valid word-end timestamps. SRT uses original/translation/romanization order; read it with `bilingual` mode. Without this option, legacy output stays unchanged.
 
-`SerializeOptions` contains export settings only. The existing third argument of `serializeLyric` accepts `ParseOptions & SerializeOptions`, so existing parsing options remain supported.
+The third argument of `serializeLyric` uses `SerializeOptions`, with parsing settings under `parse`: `serializeLyric(content, "elrc", { roundTrip: true, parse: { applyOffset: true } })`. Existing flat parsing options remain compatible; use the nested form for new code. Already-parsed lyric arrays and results are not parsed again.
 
 This is not lossless encoding of arbitrary lyric objects: plain LRC has no end times, LRC timestamps have 10ms precision, and SRT does not preserve word timing, background flags, or ruby. Enhanced LRC end markers require valid positive-duration spans. Use TTML when you need richer structure.
 

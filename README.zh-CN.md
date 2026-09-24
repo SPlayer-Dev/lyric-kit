@@ -77,7 +77,7 @@ const restored = parseLyric(srt, { multiLineMode: "bilingual" });
 
 该选项也支持 `toLRC` 和 `toEnhancedLRC`。LRC 导出会保留辅助行的和声标记，并在只有罗马音时使用 `//` 占据翻译位置；增强 LRC 还会写入有效的词尾时间标记。SRT 使用“原文、翻译、罗马音”顺序，读取时须使用 `bilingual` 模式。未开启时，原有输出顺序与文本格式不变。
 
-`SerializeOptions` 仅包含导出配置；`serializeLyric` 原第三参数同时接受 `ParseOptions & SerializeOptions`，现有解析参数仍可直接传入。
+`serializeLyric` 的第三参数使用 `SerializeOptions`，解析配置放在 `parse` 中，例如 `serializeLyric(content, "elrc", { roundTrip: true, parse: { applyOffset: true } })`。已有的扁平解析参数调用仍然兼容，新代码建议使用嵌套配置。传入已解析的歌词数组或结果时不再执行解析。
 
 这不是任意歌词对象的无损编码：标准 LRC 不记录结束时间，LRC 时间精度为 10ms；SRT 不保留逐词时间、和声标记和 ruby；增强 LRC 的词尾标记只适用于有效的正时长片段。需要更完整的结构时可使用 TTML。
 

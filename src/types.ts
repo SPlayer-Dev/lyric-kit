@@ -251,6 +251,8 @@ export type SerializeLyricFormat = "lrc" | "elrc" | "ttml" | "srt";
 
 /** 歌词导出选项 */
 export interface SerializeOptions {
+  /** 输入为原始歌词文本或 LyricInput 时使用的解析配置 */
+  parse?: ParseOptions;
   /**
    * 保留目标格式可表达的字段位置和时间，方便再次解析
    * @default false
