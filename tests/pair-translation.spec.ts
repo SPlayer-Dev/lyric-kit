@@ -28,9 +28,11 @@ describe("外部翻译对齐", () => {
       );
       const expected = structuredClone(main);
       const used = new Set<number>();
+      const usedTrans = new Set<LyricLine>();
       const pending: LyricLine[] = [];
       const assign = (index: number, item: LyricLine) => {
         used.add(index);
+        usedTrans.add(item);
         expected[index].translatedLyric = item.words[0].word;
       };
       for (const item of [...trans].sort((a, b) => a.startTime - b.startTime)) {
@@ -60,6 +62,31 @@ describe("外部翻译对齐", () => {
           );
         if (candidates[0]) assign(candidates[0].index, item);
       }
+      const fallback: LyricLine[] = [];
+      for (const item of [...trans].sort((a, b) => a.startTime - b.startTime)) {
+        if (usedTrans.has(item)) continue;
+        const exact = expected.findIndex(
+          (target, i) => !used.has(i) && target.startTime === item.startTime,
+        );
+        if (exact >= 0) assign(exact, item);
+        else fallback.push(item);
+      }
+      for (const item of fallback) {
+        const candidates = expected
+          .map((target, index) => ({
+            target,
+            index,
+            distance: Math.abs(target.startTime - item.startTime),
+          }))
+          .filter(({ index, distance }) => !used.has(index) && distance <= 300)
+          .sort(
+            (a, b) =>
+              a.distance - b.distance ||
+              a.target.startTime - b.target.startTime ||
+              a.index - b.index,
+          );
+        if (candidates[0]) assign(candidates[0].index, item);
+      }
       pairTranslation(main, trans, "translatedLyric");
       expect(main).toEqual(expected);
     }
@@ -71,6 +98,12 @@ describe("外部翻译对齐", () => {
       translation: "[00:01.20]B的翻译",
     });
     expect(lines.map((item) => item.translatedLyric)).toEqual(["", "B的翻译"]);
+  });
+
+  it("外部翻译没有声部标记时保留原有时间匹配行为", () => {
+    const { lines } = parseLyric({ content: "[00:01.00](Echo)", translation: "[00:01.00]回声" });
+    expect(lines[0].isBG).toBe(true);
+    expect(lines[0].translatedLyric).toBe("回声");
   });
 
   it("提前保留精确匹配，避免较早的偏移翻译抢占", () => {

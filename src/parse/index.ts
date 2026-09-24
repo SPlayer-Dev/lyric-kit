@@ -117,7 +117,12 @@ export const pairTranslation = (
   transLines: LyricLine[],
   field: "translatedLyric" | "romanLyric",
 ): void => {
+  if (lines.length === 0 || transLines.length === 0) return;
+  const assignedMain = new Set<LyricLine>();
+  const assignedTrans = new Set<LyricLine>();
   const assign = (main: LyricLine, trans: LyricLine): void => {
+    assignedMain.add(main);
+    assignedTrans.add(trans);
     const text = lineText(trans);
     if (isMeaningfulTranslation(text)) main[field] = text;
     if (field === "romanLyric" && hasWordTiming(main.words) && hasWordTiming(trans.words)) {
@@ -125,13 +130,10 @@ export const pairTranslation = (
     }
   };
 
-  for (const isBG of [false, true]) {
-    const main = lines
-      .filter((line) => line.isBG === isBG)
-      .sort((a, b) => a.startTime - b.startTime);
-    const trans = transLines
-      .filter((line) => line.isBG === isBG)
-      .sort((a, b) => a.startTime - b.startTime);
+  const pairGroup = (main: LyricLine[], trans: LyricLine[]): void => {
+    if (main.length === 0 || trans.length === 0) return;
+    main.sort((a, b) => a.startTime - b.startTime);
+    trans.sort((a, b) => a.startTime - b.startTime);
     const matched = new Set<LyricLine>();
     const pending: LyricLine[] = [];
     // 先预留所有精确时间戳，避免容差匹配抢占后续的精确匹配。
@@ -173,7 +175,18 @@ export const pairTranslation = (
       next.remove(index);
       previous.remove(available.length - 1 - index);
     }
+  };
+  for (const isBG of [false, true]) {
+    pairGroup(
+      lines.filter((line) => line.isBG === isBG),
+      transLines.filter((line) => line.isBG === isBG),
+    );
   }
+  // 外部辅助文件可能未标记声部，优先匹配同声部后兼容原有的时间戳回退
+  pairGroup(
+    lines.filter((line) => !assignedMain.has(line)),
+    transLines.filter((line) => !assignedTrans.has(line)),
+  );
 };
 
 /** 跳过已消费索引，通过路径压缩避免密集时间戳反复线性扫描，末项为越界哨兵 */
