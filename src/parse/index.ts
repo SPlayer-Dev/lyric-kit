@@ -176,7 +176,7 @@ export const pairTranslation = (
   }
 };
 
-/** 跳过已消费索引；路径压缩避免密集时间戳反复线性扫描。末项是越界哨兵。 */
+/** 跳过已消费索引，通过路径压缩避免密集时间戳反复线性扫描，末项为越界哨兵 */
 const createAvailableIndex = (length: number) => {
   const parents = Uint32Array.from({ length: length + 1 }, (_, index) => index);
   const find = (index: number): number => {

@@ -3,6 +3,7 @@ import type {
   LyricInput,
   LyricLine,
   LyricResult,
+  ParseOptions,
   SerializeLyricFormat,
   SerializeOptions,
 } from "../types";
@@ -19,13 +20,13 @@ export { toTTML } from "./ttml";
  * @param input - 待序列化的歌词行数组、LyricResult 解析结果、LyricInput 对象或原生歌词字符串
  * @param target - 目标导出格式
  * @default "lrc"
- * @param options - 若 input 为文本或配置对象时传递给解析器的配置选项
+ * @param options - 导出配置及文本输入的解析配置，沿用原第三参数
  * @returns 格式化后的字符串；若无有效内容返回空字符串
  */
 export const serializeLyric = (
   input: LyricLine[] | LyricResult | LyricInput | string,
   target: SerializeLyricFormat = "lrc",
-  options: SerializeOptions = {},
+  options: ParseOptions & SerializeOptions = {},
 ): string => {
   const parsed = Array.isArray(input)
     ? { lines: input, metadata: {} }

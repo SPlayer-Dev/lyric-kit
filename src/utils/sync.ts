@@ -56,9 +56,9 @@ export const findActiveLyricIndices = (lines: LyricLine[], time: number): number
 };
 
 /**
- * 为按 startTime 排序的歌词创建可重复查询的时间快照。
- * 适用于每帧查询；构建 O(n)，查询先二分裁剪已结束/未开始的区间，再检查候选重叠行。
- * 原数组或时间戳改变后须重新创建；不会缓存或修改调用方的对象。
+ * 为按 startTime 排序的歌词创建可重复查询的时间快照
+ * 适用于每帧查询，构建 O(n)，查询先二分裁剪已结束/未开始的区间，再检查候选重叠行
+ * 原数组或时间戳改变后须重新创建，不会缓存或修改调用方的对象
  */
 export const createActiveLyricFinder = (
   lines: readonly LyricLine[],

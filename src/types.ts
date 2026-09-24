@@ -249,8 +249,11 @@ export interface StripOptions {
 /** 序列化导出支持的目标格式 */
 export type SerializeLyricFormat = "lrc" | "elrc" | "ttml" | "srt";
 
-/** 导出选项；文本输入时同时支持解析配置。 */
-export interface SerializeOptions extends ParseOptions {
-  /** 保留目标格式可表达的字段位置和时间，方便再次解析。默认 false，维持原有导出格式。 */
+/** 歌词导出选项 */
+export interface SerializeOptions {
+  /**
+   * 保留目标格式可表达的字段位置和时间，方便再次解析
+   * @default false
+   */
   roundTrip?: boolean;
 }

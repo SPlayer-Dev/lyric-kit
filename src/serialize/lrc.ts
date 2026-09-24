@@ -36,7 +36,7 @@ export const toLRC = (lines: LyricLine[], options: SerializeOptions = {}): strin
   return out.join("\n");
 };
 
-/** 同步辅助行的声部标记，用占位翻译保留只有罗马音时的字段位置。 */
+/** 同步辅助行的声部标记，用占位翻译保留只有罗马音时的字段位置 */
 const appendAuxiliary = (out: string[], line: LyricLine, ts: string, roundTrip = false): void => {
   const wrap = (text: string): string => (roundTrip && line.isBG ? formatBgText(text) : text);
   if (line.translatedLyric || (roundTrip && line.romanLyric)) {
