@@ -208,11 +208,15 @@ export const parseLyric = (input: string | LyricInput, options: ParseOptions = {
   // QRC/KRC 的 kana 按原始基字符计数，外部注音也必须在部首归一化前对齐。
   const deferKangxi =
     payload.kana && options.cleanKangxi && (actualFormat === "qrc" || actualFormat === "krc");
-  const mainResult = parseContent(
-    payload.content,
-    actualFormat,
-    deferKangxi ? { ...options, cleanKangxi: false } : options,
-  );
+  const collectKanaOffset =
+    payload.kana &&
+    options.applyOffset &&
+    ["lrc", "qrc", "krc", "yrc", "lys"].includes(actualFormat);
+  const mainResult = parseContent(payload.content, actualFormat, {
+    ...options,
+    ...(deferKangxi ? { cleanKangxi: false } : {}),
+    ...(collectKanaOffset ? { extractMetadata: true } : {}),
+  });
   const lines = mainResult.lines;
 
   if (payload.translation) {
@@ -230,7 +234,7 @@ export const parseLyric = (input: string | LyricInput, options: ParseOptions = {
   }
 
   if (payload.kana) {
-    applyKanaToLines(lines, payload.kana);
+    applyKanaToLines(lines, payload.kana, collectKanaOffset ? mainResult.metadata.offset : 0);
   }
 
   if (deferKangxi) {
@@ -241,6 +245,6 @@ export const parseLyric = (input: string | LyricInput, options: ParseOptions = {
 
   return {
     lines,
-    metadata: mainResult.metadata,
+    metadata: options.extractMetadata ? mainResult.metadata : {},
   };
 };

@@ -107,7 +107,11 @@ interface KanjiLocation {
  * @param lines - 已解析出的歌词行列表
  * @param rawKanaTag - [kana:...] 标签字符串
  */
-export const applyKanaToLines = (lines: LyricLine[], rawKanaTag: string): void => {
+export const applyKanaToLines = (
+  lines: LyricLine[],
+  rawKanaTag: string,
+  timingOffset = 0,
+): void => {
   if (!rawKanaTag?.includes("[kana:")) return;
 
   const units = parseKanaUnits(rawKanaTag);
@@ -177,7 +181,13 @@ export const applyKanaToLines = (lines: LyricLine[], rawKanaTag: string): void =
       if (!primaryWord.ruby) {
         primaryWord.ruby = [];
       }
-      primaryWord.ruby.push(...unit.spans);
+      primaryWord.ruby.push(
+        ...unit.spans.map((span) => ({
+          ...span,
+          startTime: Math.max(0, span.startTime + timingOffset),
+          endTime: Math.max(0, span.endTime + timingOffset),
+        })),
+      );
       continue;
     }
 
