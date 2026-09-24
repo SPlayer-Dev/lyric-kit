@@ -69,6 +69,7 @@ export { applyKanaToLines, parseKanaUnits } from "./utils/kana";
 export { getWordSweepProgress } from "./utils/sweep";
 export {
   clampLastLineEnd,
+  createActiveLyricFinder,
   findActiveLyricIndices,
   findLyricIndex,
   pickAdvanceOnEndIndex,
