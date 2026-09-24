@@ -184,7 +184,7 @@ export interface ParseOptions {
 
   /**
    * 是否在解析时自动将 metadata.offset 毫秒数累加至所有行和词的时间戳中
-   * 独立于 extractMetadata；关闭元数据输出时仍会应用输入中的 offset。
+   * 独立于 extractMetadata，关闭元数据输出时仍会应用输入中的 offset
    * 采用数值直接累加约定：newTime = originalTime + offset。
    * - offset > 0 时歌词时间戳增大（延后展示）；
    * - offset < 0 时歌词时间戳减小（提前展示）。

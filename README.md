@@ -67,6 +67,20 @@ import { serializeLyric } from "lyric-kit";
 const output = serializeLyric(lines, "ttml");
 ```
 
+Existing export defaults remain unchanged. To read exported lyrics back, opt in with `roundTrip: true`:
+
+```ts
+const elrc = serializeLyric(lines, "elrc", { roundTrip: true });
+const srt = toSRT(lines, { roundTrip: true });
+const restored = parseLyric(srt, { multiLineMode: "bilingual" });
+```
+
+The option also works with `toLRC` and `toEnhancedLRC`. LRC preserves background markers on auxiliary lines and uses `//` as a translation placeholder when only romanization is present. Enhanced LRC additionally emits valid word-end timestamps. SRT uses original/translation/romanization order; read it with `bilingual` mode. Without this option, legacy output stays unchanged.
+
+`SerializeOptions` contains export settings only. The existing third argument of `serializeLyric` accepts `ParseOptions & SerializeOptions`, so existing parsing options remain supported.
+
+This is not lossless encoding of arbitrary lyric objects: plain LRC has no end times, LRC timestamps have 10ms precision, and SRT does not preserve word timing, background flags, or ruby. Enhanced LRC end markers require valid positive-duration spans. Use TTML when you need richer structure.
+
 ### Clean Metadata Headers
 
 Strip credit headers/footers (lyricist, composer, arranger, copyright notices):
@@ -98,6 +112,7 @@ console.log(lines[0].language); // e.g., "ja"
 
 ```ts
 import {
+  createActiveLyricFinder,
   findActiveLyricIndices,
   findLyricIndex,
   getWordSweepProgress,
@@ -109,6 +124,11 @@ const lineIndex = findLyricIndex(lines, currentMs);
 
 // 2. Multi-line overlap lookup (returns all active line indices at currentMs)
 const activeIndices = findActiveLyricIndices(lines, currentMs);
+
+// For per-frame queries or long lyrics, prebuild a snapshot of sorted lines
+const findActive = createActiveLyricFinder(lines);
+const active = findActive(currentMs);
+// Recreate the finder after changing timestamps or line order
 
 if (lineIndex !== -1) {
   const activeLine = lines[lineIndex];
@@ -146,7 +166,7 @@ Parses lyrics and returns a `LyricResult`.
 | `detectBackground` | `boolean` | `true` | Detect and split parenthesized background/harmony vocals. |
 | `extractMetadata` | `boolean` | `false` | Extract song metadata (title, artist, album, creators, offset). |
 | `cleanKangxi` | `boolean` | `false` | Normalize KangXi radicals and CJK compatibility ideographs to standard characters. |
-| `applyOffset` | `boolean` | `false` | Automatically apply `metadata.offset` ms to all lines and words (`newTime = originalTime + offset`). |
+| `applyOffset` | `boolean` | `false` | Apply the input offset to line, word, and ruby timestamps (`newTime = originalTime + offset`, clamped to 0), independently of `extractMetadata`. |
 | `keepEmptyLines` | `boolean` | `false` | Keep empty lines (interlude markers). Defaults to `false` (strips empty lines after clamping previous line); `true` preserves them for player interlude handling. |
 | `multiLineMode` | `"join" \| "bilingual"` | `"join"` | SRT multi-line parsing mode. `join` joins lines with space; `bilingual` maps lines to primary, translation, romanization. |
 | `preferredLang` | `string` | `""` | Preferred translation language code for multi-track TTML (e.g. `"zh-CN"`). |

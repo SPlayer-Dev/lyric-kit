@@ -67,6 +67,20 @@ import { serializeLyric } from "lyric-kit";
 const output = serializeLyric(lines, "ttml");
 ```
 
+默认导出格式保持兼容。如需再次解析导出结果，可显式传入 `roundTrip: true`：
+
+```ts
+const elrc = serializeLyric(lines, "elrc", { roundTrip: true });
+const srt = toSRT(lines, { roundTrip: true });
+const restored = parseLyric(srt, { multiLineMode: "bilingual" });
+```
+
+该选项也支持 `toLRC` 和 `toEnhancedLRC`。LRC 导出会保留辅助行的和声标记，并在只有罗马音时使用 `//` 占据翻译位置；增强 LRC 还会写入有效的词尾时间标记。SRT 使用“原文、翻译、罗马音”顺序，读取时须使用 `bilingual` 模式。未开启时，原有输出顺序与文本格式不变。
+
+`SerializeOptions` 仅包含导出配置；`serializeLyric` 原第三参数同时接受 `ParseOptions & SerializeOptions`，现有解析参数仍可直接传入。
+
+这不是任意歌词对象的无损编码：标准 LRC 不记录结束时间，LRC 时间精度为 10ms；SRT 不保留逐词时间、和声标记和 ruby；增强 LRC 的词尾标记只适用于有效的正时长片段。需要更完整的结构时可使用 TTML。
+
 ### 清理元数据标头
 
 过滤歌词开头的演职人员信息与版权声明等非歌词文本行：
@@ -98,6 +112,7 @@ console.log(lines[0].language); // 例如: "ja"
 
 ```ts
 import {
+  createActiveLyricFinder,
   findActiveLyricIndices,
   findLyricIndex,
   getWordSweepProgress,
@@ -109,6 +124,11 @@ const lineIndex = findLyricIndex(lines, currentMs);
 
 // 2. 多行和声/对唱重叠查找（返回当前时间所有活跃行下标）
 const activeIndices = findActiveLyricIndices(lines, currentMs);
+
+// 每帧查询或长歌词可预建时间索引，lines 须按 startTime 排序
+const findActive = createActiveLyricFinder(lines);
+const active = findActive(currentMs);
+// 修改歌词顺序或时间戳后需重新创建索引
 
 if (lineIndex !== -1) {
   const activeLine = lines[lineIndex];
@@ -146,7 +166,7 @@ if (lineIndex !== -1) {
 | `detectBackground` | `boolean` | `true` | 是否识别并分离括号内的和声与伴唱（标记为 `isBG`）。 |
 | `extractMetadata` | `boolean` | `false` | 是否提取歌曲元数据（歌曲名、歌手、专辑、制作人员、偏移量等）。 |
 | `cleanKangxi` | `boolean` | `false` | 是否将康熙部首及 CJK 兼容字符规范化为通用汉字。 |
-| `applyOffset` | `boolean` | `false` | 是否自动将 `metadata.offset` 毫秒数累加至所有行和词的时间戳中（`newTime = originalTime + offset`）。 |
+| `applyOffset` | `boolean` | `false` | 是否将输入的 offset 毫秒数累加至行、词和注音时间戳中（`newTime = originalTime + offset`，最小为 0），独立于 `extractMetadata`。 |
 | `keepEmptyLines` | `boolean` | `false` | 是否保留纯空白文本行（间奏标记）。默认 `false` 过滤空行并截断前行；`true` 时完整保留供播放器处理间奏。 |
 | `multiLineMode` | `"join" \| "bilingual"` | `"join"` | SRT 多行解析模式。`join` 用空格连接多行；`bilingual` 首行为原文，第二行为译文，第三行为音译。 |
 | `preferredLang` | `string` | `""` | 多轨道 TTML 解析时优先匹配的翻译语言代码（如 `"zh-CN"`）。 |
