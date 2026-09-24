@@ -136,7 +136,7 @@ export const pairTranslation = (
     trans.sort((a, b) => a.startTime - b.startTime);
     const matched = new Set<LyricLine>();
     const pending: LyricLine[] = [];
-    // 先预留所有精确时间戳，避免容差匹配抢占后续的精确匹配。
+    // 先预留所有精确时间戳，避免容差匹配抢占后续的精确匹配
     let exactIndex = 0;
     for (const item of trans) {
       while (exactIndex < main.length && main[exactIndex].startTime < item.startTime) exactIndex++;
@@ -147,7 +147,9 @@ export const pairTranslation = (
       } else pending.push(item);
     }
 
+    if (pending.length === 0) return;
     const available = main.filter((line) => !matched.has(line));
+    if (available.length === 0) return;
     const next = createAvailableIndex(available.length);
     const previous = createAvailableIndex(available.length);
     const lowerBound = (time: number): number => {
@@ -169,7 +171,7 @@ export const pairTranslation = (
         right < available.length ? available[right].startTime - item.startTime : Infinity;
       if (Math.min(leftDiff, rightDiff) > ALIGN_TOLERANCE_MS) continue;
       const nearest = leftDiff <= rightDiff ? left : right;
-      // 同时间戳的多个候选保持输入顺序。
+      // 同时间戳的多个候选保持输入顺序
       const index = next.find(lowerBound(available[nearest].startTime));
       assign(available[index], item);
       next.remove(index);
@@ -183,6 +185,7 @@ export const pairTranslation = (
     );
   }
   // 外部辅助文件可能未标记声部，优先匹配同声部后兼容原有的时间戳回退
+  if (assignedTrans.size === transLines.length || assignedMain.size === lines.length) return;
   pairGroup(
     lines.filter((line) => !assignedMain.has(line)),
     transLines.filter((line) => !assignedTrans.has(line)),
