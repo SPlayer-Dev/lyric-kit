@@ -41,7 +41,7 @@ export const serializeLyric = (
     case "ttml":
       return toTTML(parsed);
     case "elrc":
-      return toEnhancedLRC(parsed.lines);
+      return toEnhancedLRC(parsed.lines, options);
     case "srt":
       return toSRT(parsed.lines, options);
     default:

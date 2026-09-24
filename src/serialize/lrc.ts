@@ -50,17 +50,33 @@ const appendAuxiliary = (out: string[], line: LyricLine, ts: string, roundTrip =
  * @param lines - 歌词行数组
  * @returns 增强型 LRC 格式字符串
  */
-export const toEnhancedLRC = (lines: LyricLine[]): string => {
+export const toEnhancedLRC = (lines: LyricLine[], options: SerializeOptions = {}): string => {
   const out: string[] = [];
   for (const line of lines) {
     if (line.words.length === 0) continue;
     const lineTs = `[${formatLrcTime(line.startTime)}]`;
-    let body = line.words.map((word) => `<${formatLrcTime(word.startTime)}>${word.word}`).join("");
+    let body = line.words
+      .map((word, index) => {
+        let text = word.word;
+        if (options.roundTrip && line.isBG) {
+          if (index === 0) text = `(${text}`;
+          if (index === line.words.length - 1) text += ")";
+        }
+        let part = `<${formatLrcTime(word.startTime)}>${text}`;
+        if (
+          options.roundTrip &&
+          word.endTime > word.startTime &&
+          word.endTime !== line.words[index + 1]?.startTime
+        ) {
+          part += `<${formatLrcTime(word.endTime)}>`;
+        }
+        return part;
+      })
+      .join("");
     if (!body.trim()) continue;
-    if (line.isBG) body = formatBgText(body);
+    if (line.isBG && !options.roundTrip) body = formatBgText(body);
     out.push(`${lineTs}${body}`);
-    if (line.translatedLyric) out.push(`${lineTs}${line.translatedLyric}`);
-    if (line.romanLyric) out.push(`${lineTs}${line.romanLyric}`);
+    appendAuxiliary(out, line, lineTs, options.roundTrip);
   }
   return out.join("\n");
 };

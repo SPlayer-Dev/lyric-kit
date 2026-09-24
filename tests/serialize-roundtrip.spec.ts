@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseLRC, parseSRT } from "../src/parse";
-import { serializeLyric, toLRC, toSRT } from "../src/serialize";
+import { serializeLyric, toEnhancedLRC, toLRC, toSRT } from "../src/serialize";
 import type { LyricLine } from "../src/types";
 
 const makeLine = (
@@ -47,6 +47,38 @@ describe("LRC 字段归属", () => {
     );
     expect(input).toEqual(before);
     expect(toLRC([makeLine("", "roman")])).toBe("[00:01.00]こんにちは\n[00:01.00]roman");
+  });
+});
+
+describe("增强 LRC 往返时间", () => {
+  it.each([false, true])("保留 isBG=%s 的末词结束时间与字段", (isBG) => {
+    for (const translation of ["你好", ""]) {
+      const input = [makeLine(translation, "konnichiwa", isBG)];
+      const original = structuredClone(input);
+      const output = toEnhancedLRC(input, { roundTrip: true });
+      expect(parseLRC(output).lines).toEqual(input);
+      expect(serializeLyric(input, "elrc", { roundTrip: true })).toBe(output);
+      expect(input).toEqual(original);
+    }
+  });
+
+  it("保留词间间隙和空格，末词结束不被延长到下一行", () => {
+    const first = makeLine("", "");
+    first.words = [
+      { word: "Hello ", startTime: 1000, endTime: 1300 },
+      { word: "World", startTime: 1600, endTime: 2000 },
+    ];
+    const second = {
+      ...makeLine("", ""),
+      startTime: 5000,
+      endTime: 6000,
+      words: [{ word: "Next", startTime: 5000, endTime: 6000 }],
+    };
+    expect(parseLRC(toEnhancedLRC([first, second], { roundTrip: true })).lines).toEqual([
+      first,
+      second,
+    ]);
+    expect(toEnhancedLRC([makeLine("", "")])).toBe("[00:01.00]<00:01.00>こんにちは");
   });
 });
 
