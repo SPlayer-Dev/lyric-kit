@@ -3,8 +3,8 @@ import type {
   LyricInput,
   LyricLine,
   LyricResult,
-  ParseOptions,
   SerializeLyricFormat,
+  SerializeOptions,
 } from "../types";
 import { toEnhancedLRC, toLRC } from "./lrc";
 import { toSRT } from "./srt";
@@ -25,7 +25,7 @@ export { toTTML } from "./ttml";
 export const serializeLyric = (
   input: LyricLine[] | LyricResult | LyricInput | string,
   target: SerializeLyricFormat = "lrc",
-  options: ParseOptions = {},
+  options: SerializeOptions = {},
 ): string => {
   const parsed = Array.isArray(input)
     ? { lines: input, metadata: {} }
@@ -43,7 +43,7 @@ export const serializeLyric = (
     case "elrc":
       return toEnhancedLRC(parsed.lines);
     case "srt":
-      return toSRT(parsed.lines);
+      return toSRT(parsed.lines, options);
     default:
       return toLRC(parsed.lines);
   }

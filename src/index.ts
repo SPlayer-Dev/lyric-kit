@@ -56,6 +56,7 @@ export type {
   LyricWord,
   ParseOptions,
   SerializeLyricFormat,
+  SerializeOptions,
   StripOptions,
   TTMLAgent,
   TTMLPlatformId,
