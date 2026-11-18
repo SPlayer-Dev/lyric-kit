@@ -15,6 +15,12 @@ const LANG_TAG_ALIASES: Record<string, string> = {
 const normalizeLang = (lang: string | null | undefined): string =>
   (lang ?? "").toLowerCase().replace(/_/g, "-");
 
+/** 中文轨道的简繁字形，兼容 zh-CN / zh-TW 等地区别名。 */
+const getChineseScript = (lang: string): string | undefined => {
+  const canonical = LANG_TAG_ALIASES[lang] ?? lang;
+  return /^zh-(hans|hant)(?:-|$)/.exec(canonical)?.[1];
+};
+
 /**
  * 根据偏好语言从多语言候选列表中挑选最优匹配索引
  * @param langs - 候选语言代码列表
@@ -29,6 +35,15 @@ export const pickLangIndex = (langs: (string | null)[], preferred: string): numb
 
   const normalizedPreferred = normalizeLang(preferred);
   if (!normalizedPreferred) return 0;
+
+  // 泛化到 zh 时仍保留显式的简繁约束，不能回退到相反字形的轨道。
+  const preferredScript = getChineseScript(normalizedPreferred);
+  if (preferredScript) {
+    for (let i = 0; i < normalizedOptions.length; i++) {
+      const script = getChineseScript(normalizedOptions[i]);
+      if (script && script !== preferredScript) normalizedOptions[i] = "";
+    }
+  }
   const wants = [normalizedPreferred];
 
   // 将 wants 拆分，比如 zh-hans-cn -> zh-hans-cn, zh-hans, zh

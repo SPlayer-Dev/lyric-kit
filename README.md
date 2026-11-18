@@ -194,6 +194,12 @@ Parses lyrics and returns a `LyricResult`.
 | `preferredLang`    | `string`                | `""`     | Preferred translation language code for multi-track TTML (e.g. `"zh-CN"`).                                                                                        |
 | `domParser`        | `DOMParserLike`         | auto     | Custom DOMParser instance/constructor (required in non-browser/Node.js environments when parsing TTML or QRC XML).                                                |
 
+TTML compatibility rules (for both `parseLyric` and `parseTTML`):
+
+- Apple Music `translation type="replacement"` tracks are not appended as subtitles; the original `words` remain unchanged.
+- Chinese script preferences such as `zh-CN` / `zh-Hans` and `zh-TW` / `zh-Hant` do not fall back to the opposite script.
+- Each primary line and each individual `x-bg` line independently omits translations and romanizations identical to its original text. Comparison normalizes whitespace and ignores enclosing background parentheses, but preserves case and punctuation differences. Suppressed romanization leaves `romanLyric` empty and does not populate `romanWord`; partially different lines retain their complete romanization.
+
 ### Format Parsers & Serializers
 
 Dedicated parsers and serializers for each format can be called directly (unified uppercase standard naming):

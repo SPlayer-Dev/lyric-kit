@@ -194,6 +194,12 @@ if (lineIndex !== -1) {
 | `preferredLang`    | `string`                | `""`     | 多轨道 TTML 解析时优先匹配的翻译语言代码（如 `"zh-CN"`）。                                                                      |
 | `domParser`        | `DOMParserLike`         | 自动     | 自定义 DOMParser 实例或构造函数（Node.js 等无原生 DOM 环境下解析 TTML / QRC 必填）。                                            |
 
+TTML 兼容规则（`parseLyric` 与 `parseTTML` 均适用）：
+
+- Apple Music 的 `translation type="replacement"` 是原文替换轨，不作为翻译字幕拼接输出；原文 `words` 保持不变。
+- `zh-CN` / `zh-Hans` 等简体偏好不会回退到繁体轨，`zh-TW` / `zh-Hant` 等繁体偏好也不会回退到简体轨。
+- 每句主歌词、每条独立的 `x-bg` 分别比较：翻译或音译与该句原文完全相同时不输出。比较时规范化空白、忽略背景歌词首尾的包裹括号，但保留大小写与标点差异。屏蔽音译时 `romanLyric` 为空，且不挂载 `romanWord`；只有部分内容相同的混合行保留完整音译。
+
 ### 独立格式解析器与序列化器
 
 可直接导入各格式的专属解析与导出函数（统一采用全大写规范命名）：

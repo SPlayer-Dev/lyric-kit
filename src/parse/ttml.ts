@@ -170,8 +170,8 @@ interface SidecarItem {
 interface SidecarEntry {
   translations?: SidecarItem[];
   romanizations?: SidecarItem[];
-  bgTranslations?: SidecarItem[];
-  bgRomanizations?: SidecarItem[];
+  bgTranslations?: SidecarItem[][];
+  bgRomanizations?: SidecarItem[][];
 }
 
 type SidecarMap = Record<string, SidecarEntry>;
@@ -345,6 +345,10 @@ const parseHead = (
         processedSet.add(itemContainer);
         const items = findElementsByLocalName(itemContainer, itemName);
         for (const item of items) {
+          // replacement 是原文的替换版本，不是额外展示的翻译字幕。
+          if (type === "translations" && item.getAttribute(Attributes.Type) === "replacement") {
+            continue;
+          }
           const lang = getAttr(item, NS.XML, Attributes.Lang, "xml:lang");
           const textNodes = findElementsByLocalName(item, Elements.Text);
           for (const textNode of textNodes) {
@@ -352,9 +356,8 @@ const parseHead = (
             if (!forId) continue;
 
             let mainText = "";
-            let bgText = "";
+            let bgIndex = 0;
             const mainWords: LyricWord[] = [];
-            const bgWords: LyricWord[] = [];
 
             for (const node of Array.from(textNode.childNodes)) {
               if (node.nodeType === 3) {
@@ -370,7 +373,8 @@ const parseHead = (
                 const endAttr = getAttr(childEl, NS.XML, Attributes.End);
 
                 if (isBg) {
-                  bgText += raw;
+                  const bgText = stripParens(normalized);
+                  const bgWords: LyricWord[] = [];
                   const innerSpans = childEl.getElementsByTagName("span");
                   if (innerSpans.length > 0) {
                     for (let spanIndex = 0; spanIndex < innerSpans.length; spanIndex++) {
@@ -393,6 +397,17 @@ const parseHead = (
                       endTime: parseTTMLTime(endAttr),
                     });
                   }
+                  if (bgText) {
+                    const entry = (sidecar[forId] ??= {});
+                    const bgType = type === "translations" ? "bgTranslations" : "bgRomanizations";
+                    const bgEntries = (entry[bgType] ??= []);
+                    (bgEntries[bgIndex] ??= []).push({
+                      lang,
+                      text: bgText,
+                      words: bgWords.length > 0 ? bgWords : undefined,
+                    });
+                  }
+                  bgIndex++;
                 } else {
                   mainText += raw;
                   const innerSpans = childEl.getElementsByTagName("span");
@@ -423,24 +438,12 @@ const parseHead = (
             }
 
             mainText = normalizeText(mainText);
-            const normalizedBg = normalizeText(bgText);
-            bgText = stripParens(normalizedBg);
-            if (!mainText && !bgText) continue;
-
-            if (!sidecar[forId]) sidecar[forId] = {};
             if (mainText) {
-              (sidecar[forId][type] ??= []).push({
+              const entry = (sidecar[forId] ??= {});
+              (entry[type] ??= []).push({
                 lang,
                 text: mainText,
                 words: mainWords.length > 0 ? mainWords : undefined,
-              });
-            }
-            if (bgText) {
-              const bgType = type === "translations" ? "bgTranslations" : "bgRomanizations";
-              (sidecar[forId][bgType] ??= []).push({
-                lang,
-                text: bgText,
-                words: bgWords.length > 0 ? bgWords : undefined,
               });
             }
           }
@@ -675,7 +678,7 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
           }
 
           // 若背景音无逐字 span，回退为单词行
-          const cleanBgText = stripParens(bgState.fullText);
+          const cleanBgText = stripParens(normalizeText(bgState.fullText));
           const isLineTimedBg = bgState.words.length === 0;
           if (isLineTimedBg && cleanBgText) {
             bgState.words.push({
@@ -691,16 +694,19 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
 
           if (parentKey && sidecar[parentKey]) {
             const sc = sidecar[parentKey];
-            if (sc.bgTranslations?.length) {
+            const bgIndex = state.bgLines.length;
+            const bgTranslations = sc.bgTranslations?.[bgIndex];
+            if (bgTranslations?.length) {
               const idx = pickLangIndex(
-                sc.bgTranslations.map((transItem) => transItem.lang),
+                bgTranslations.map((transItem) => transItem.lang),
                 preferredLang,
               );
-              if (idx !== -1) trans = sc.bgTranslations[idx].text;
+              if (idx !== -1) trans = bgTranslations[idx].text;
             }
-            if (sc.bgRomanizations?.length) {
-              roman = sc.bgRomanizations[0].text;
-              selectedBgRomanWords = sc.bgRomanizations[0].words;
+            const bgRomanizations = sc.bgRomanizations?.[bgIndex];
+            if (bgRomanizations?.length) {
+              roman = bgRomanizations[0].text;
+              selectedBgRomanWords = bgRomanizations[0].words;
             }
           }
 
@@ -718,7 +724,10 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
             roman = bgState.romanizations[0].text;
           }
 
-          if (selectedBgRomanWords && !isLineTimedBg) {
+          if (stripParens(trans) === cleanBgText) trans = "";
+          if (stripParens(roman) === cleanBgText) {
+            roman = "";
+          } else if (selectedBgRomanWords && !isLineTimedBg) {
             alignRomanization(bgState.words, selectedBgRomanWords);
           }
 
@@ -890,7 +899,11 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
       romanLyric = state.romanizations[0].text;
     }
 
-    if (selectedRomanWords && state.words.length > 0) {
+    const originalText = normalizeText(state.fullText);
+    if (translatedLyric === originalText) translatedLyric = "";
+    if (romanLyric === originalText) {
+      romanLyric = "";
+    } else if (selectedRomanWords && state.words.length > 0) {
       alignRomanization(state.words, selectedRomanWords);
     }
 
