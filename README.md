@@ -191,8 +191,14 @@ Parses lyrics and returns a `LyricResult`.
 | `applyOffset`      | `boolean`               | `false`  | Apply the input offset to line, word, and ruby timestamps (`newTime = originalTime + offset`, clamped to 0), independently of `extractMetadata`.                  |
 | `keepEmptyLines`   | `boolean`               | `false`  | Keep empty lines (interlude markers). Defaults to `false` (strips empty lines after clamping previous line); `true` preserves them for player interlude handling. |
 | `multiLineMode`    | `"join" \| "bilingual"` | `"join"` | SRT multi-line parsing mode. `join` joins lines with space; `bilingual` maps lines to primary, translation, romanization.                                         |
-| `preferredLang`    | `string`                | `""`     | Preferred translation language code for multi-track TTML (e.g. `"zh-CN"`).                                                                                        |
+| `preferredLang`    | `string`                | `""`     | Preferred language code for TTML replacement text and translation subtitles (e.g. `"zh-CN"`).                                                                   |
 | `domParser`        | `DOMParserLike`         | auto     | Custom DOMParser instance/constructor (required in non-browser/Node.js environments when parsing TTML or QRC XML).                                                |
+
+TTML compatibility rules (for both `parseLyric` and `parseTTML`):
+
+- With an explicit `preferredLang`, matching Apple Music `translation type="replacement"` tracks replace the primary text and corresponding `x-bg` text rather than appearing as subtitles. Without a matching track or an explicit preference, the body text is retained. Replacement word timestamps are used when present; untimed replacements retain the original line's timing range.
+- Chinese script preferences such as `zh-CN` / `zh-Hans` and `zh-TW` / `zh-Hant` do not fall back to the opposite script.
+- Each primary line and each individual `x-bg` line independently omits translations and romanizations identical to its selected text, after applying any replacement. Comparison normalizes whitespace and ignores enclosing background parentheses, but preserves case and punctuation differences. Suppressed romanization leaves `romanLyric` empty and does not populate `romanWord`; partially different lines retain their complete romanization.
 
 ### Format Parsers & Serializers
 

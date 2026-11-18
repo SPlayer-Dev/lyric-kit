@@ -191,8 +191,14 @@ if (lineIndex !== -1) {
 | `applyOffset`      | `boolean`               | `false`  | 是否将输入的 offset 毫秒数累加至行、词和注音时间戳中（`newTime = originalTime + offset`，最小为 0），独立于 `extractMetadata`。 |
 | `keepEmptyLines`   | `boolean`               | `false`  | 是否保留纯空白文本行（间奏标记）。默认 `false` 过滤空行并截断前行；`true` 时完整保留供播放器处理间奏。                          |
 | `multiLineMode`    | `"join" \| "bilingual"` | `"join"` | SRT 多行解析模式。`join` 用空格连接多行；`bilingual` 首行为原文，第二行为译文，第三行为音译。                                   |
-| `preferredLang`    | `string`                | `""`     | 多轨道 TTML 解析时优先匹配的翻译语言代码（如 `"zh-CN"`）。                                                                      |
+| `preferredLang`    | `string`                | `""`     | TTML 正文替换轨与翻译字幕轨的偏好语言代码（如 `"zh-CN"`）。                                                                    |
 | `domParser`        | `DOMParserLike`         | 自动     | 自定义 DOMParser 实例或构造函数（Node.js 等无原生 DOM 环境下解析 TTML / QRC 必填）。                                            |
+
+TTML 兼容规则（`parseLyric` 与 `parseTTML` 均适用）：
+
+- 显式指定 `preferredLang` 时，优先采用匹配语言的 Apple Music `translation type="replacement"`，替换主歌词及对应 `x-bg` 的正文，不作为字幕拼接输出。没有匹配轨或未指定偏好时保留原文。替换轨有逐字时间时使用其时间戳；只有整句文本时保留原句的时间范围。
+- `zh-CN` / `zh-Hans` 等简体偏好不会回退到繁体轨，`zh-TW` / `zh-Hant` 等繁体偏好也不会回退到简体轨。
+- 每句主歌词、每条独立的 `x-bg` 分别以替换后的正文比较：翻译或音译与该句正文完全相同时不输出。比较时规范化空白、忽略背景歌词首尾的包裹括号，但保留大小写与标点差异。屏蔽音译时 `romanLyric` 为空，且不挂载 `romanWord`；只有部分内容相同的混合行保留完整音译。
 
 ### 独立格式解析器与序列化器
 
