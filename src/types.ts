@@ -177,7 +177,7 @@ export interface ParseOptions {
   cleanKangxi?: boolean;
 
   /**
-   * 偏好翻译语言标签，用于 TTML 等格式挑选多语言轨道
+   * 偏好语言标签，用于 TTML 等格式选择正文替换轨与翻译字幕轨
    * @example "zh-CN"
    */
   preferredLang?: string;

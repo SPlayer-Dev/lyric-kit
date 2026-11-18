@@ -167,11 +167,18 @@ interface SidecarItem {
   words?: LyricWord[];
 }
 
+interface ReplacementItem {
+  lang: string | null;
+  element: Element;
+}
+
 interface SidecarEntry {
   translations?: SidecarItem[];
   romanizations?: SidecarItem[];
+  replacements?: ReplacementItem[];
   bgTranslations?: SidecarItem[][];
   bgRomanizations?: SidecarItem[][];
+  bgReplacements?: ReplacementItem[][];
 }
 
 type SidecarMap = Record<string, SidecarEntry>;
@@ -345,15 +352,28 @@ const parseHead = (
         processedSet.add(itemContainer);
         const items = findElementsByLocalName(itemContainer, itemName);
         for (const item of items) {
-          // replacement 是原文的替换版本，不是额外展示的翻译字幕。
-          if (type === "translations" && item.getAttribute(Attributes.Type) === "replacement") {
-            continue;
-          }
+          // replacement 单独保留，按偏好语言替换正文，不参与字幕选择。
+          const isReplacement =
+            type === "translations" && item.getAttribute(Attributes.Type) === "replacement";
           const lang = getAttr(item, NS.XML, Attributes.Lang, "xml:lang");
           const textNodes = findElementsByLocalName(item, Elements.Text);
           for (const textNode of textNodes) {
             const forId = textNode.getAttribute(Attributes.For);
             if (!forId) continue;
+            if (isReplacement) {
+              if (!textNode.textContent?.trim()) continue;
+              const entry = (sidecar[forId] ??= {});
+              (entry.replacements ??= []).push({ lang, element: textNode });
+              let bgIndex = 0;
+              for (const node of Array.from(textNode.childNodes)) {
+                if (node.nodeType !== 1) continue;
+                const child = node as Element;
+                if (getAttr(child, NS.TTM, Attributes.Role, "ttm:role") !== Values.RoleBg) continue;
+                const backgrounds = (entry.bgReplacements ??= []);
+                (backgrounds[bgIndex++] ??= []).push({ lang, element: child });
+              }
+              continue;
+            }
 
             let mainText = "";
             let bgIndex = 0;
@@ -546,13 +566,13 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
    * 递归解析段落或背景音节点的内容、逐字时间戳与内嵌角色
    * @param element - 当前 DOM 元素
    * @param parentKey - 父级节点的 key 标识
-   * @param isBG - 是否作为背景音解析，默认 false
+   * @param skipBackground - 是否跳过内嵌背景音，默认 false
    * @returns 解析后的段落状态（包含文本、单词、翻译与音译）
    */
   const parseCommonContent = (
     element: Element,
     parentKey: string | null,
-    isBG = false,
+    skipBackground = false,
   ): ParsedParagraphState => {
     const state: ParsedParagraphState = {
       fullText: "",
@@ -639,17 +659,24 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
               });
             }
           }
-        } else if (role === Values.RoleBg && !isBG) {
+        } else if (role === Values.RoleBg) {
+          if (skipBackground) continue;
           // 背景歌词（role="x-bg"）
           const bgBegin = getAttr(el, NS.XML, Attributes.Begin);
           const bgEnd = getAttr(el, NS.XML, Attributes.End);
           const bgState = parseCommonContent(el, parentKey, true);
+          const sourceBgWords = bgState.words;
+          applyPreferredReplacement(
+            bgState,
+            parentKey ? sidecar[parentKey]?.bgReplacements?.[state.bgLines.length] : undefined,
+          );
+          const timingWords = bgState.words.length > 0 ? bgState.words : sourceBgWords;
 
           let bgStart = bgBegin ? parseTTMLTime(bgBegin) : 0;
           let bgEndMs = bgEnd ? parseTTMLTime(bgEnd) : 0;
-          if (bgState.words.length > 0) {
-            const childStart = Math.min(...bgState.words.map((word) => word.startTime));
-            const childEnd = Math.max(...bgState.words.map((word) => word.endTime));
+          if (timingWords.length > 0) {
+            const childStart = Math.min(...timingWords.map((word) => word.startTime));
+            const childEnd = Math.max(...timingWords.map((word) => word.endTime));
             if (bgStart === 0 || (childStart > 0 && childStart < bgStart)) bgStart = childStart;
             if (bgEndMs === 0 || childEnd > bgEndMs) bgEndMs = childEnd;
           }
@@ -793,6 +820,23 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
     return state;
   };
 
+  /** 先按语言选择正文替换轨，再由调用方执行时间推导与辅助歌词去重。 */
+  const applyPreferredReplacement = (
+    state: ParsedParagraphState,
+    replacements?: ReplacementItem[],
+  ): void => {
+    if (!preferredLang || !replacements?.length) return;
+    const index = pickLangIndex(
+      replacements.map((item) => item.lang),
+      preferredLang,
+    );
+    if (index === -1) return;
+    const replacement = parseCommonContent(replacements[index].element, null, true);
+    if (!replacement.fullText.trim()) return;
+    state.fullText = replacement.fullText;
+    state.words = replacement.words;
+  };
+
   let lastPersonAgentId: string | null = null;
   let lastPersonIsDuet = false;
 
@@ -849,12 +893,17 @@ export const parseTTML = (text: string, options: ParseOptions = {}): LyricResult
       getAttr(paragraph, NS.ITUNES, Attributes.Key, "itunes:key") || paragraph.getAttribute("id");
 
     const state = parseCommonContent(paragraph, key, false);
+    const sourceWords = state.words;
+    applyPreferredReplacement(state, key ? sidecar[key]?.replacements : undefined);
 
     let startTime = begin ? parseTTMLTime(begin) : 0;
     let endTime = end ? parseTTMLTime(end) : 0;
 
     // 与 AMLL 一致，逐字和背景人声共同扩展行时间，缺失边界分别推导。
-    const timedElements = [...state.words, ...state.bgLines];
+    const timedElements = [
+      ...(state.words.length > 0 ? state.words : sourceWords),
+      ...state.bgLines,
+    ];
     if (timedElements.length > 0) {
       const childStart = Math.min(...timedElements.map((item) => item.startTime));
       const childEnd = Math.max(...timedElements.map((item) => item.endTime));
